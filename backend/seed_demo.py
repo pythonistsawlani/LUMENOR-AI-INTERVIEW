@@ -294,12 +294,20 @@ async def seed():
     if first_job:
         existing_candidates = await db.candidates.count_documents({"recruiter_id": recruiter_id})
         if existing_candidates == 0:
-            for c in DEMO_CANDIDATES:
+            # Build candidates inline from resume data
+            demo_candidates = [
+                {"name": "Sophia Zhang", "email": "sophia.zhang@email.com", "phone": "+1-415-555-0101", "status": "interview", "match_score": 96, "ai_insights": {"match_score": 96, "summary": "Exceptionally strong match. 6 years React/TypeScript, design system contributor, GraphQL expertise.", "good_points": ["6 years React/TypeScript", "Design system contributor", "GraphQL expertise"], "missing_points": ["Vite exposure limited"], "recommendation_label": "Strong Fit", "interview_questions": ["Walk me through how you've architected a design system from scratch."]}, "created_at": datetime.utcnow()},
+                {"name": "Marcus Johnson", "email": "marcus.j@email.com", "phone": "+1-312-555-0202", "status": "screening", "match_score": 88, "ai_insights": {"match_score": 88, "summary": "Solid React developer with 4 years experience. Custom hooks author, strong CSS skills.", "good_points": ["4 years React experience", "Custom hooks library author", "Strong CSS skills"], "missing_points": ["No GraphQL", "Limited TypeScript at scale"], "recommendation_label": "Strong Fit", "interview_questions": ["How do you manage complex state across deeply nested components?"]}, "created_at": datetime.utcnow()},
+                {"name": "Priya Nair", "email": "priya.nair@email.com", "phone": "+1-650-555-0303", "status": "new", "match_score": 72, "ai_insights": {"match_score": 72, "summary": "2 years frontend experience with strong academic background. Good eye for design, needs more seniority.", "good_points": ["Clean code", "Good design sense", "Google intern"], "missing_points": ["Only 2 years exp", "No TypeScript at scale"], "recommendation_label": "Moderate Fit", "interview_questions": ["Tell me about the most complex UI component you've built."]}, "created_at": datetime.utcnow()},
+                {"name": "Daniel Kim", "email": "d.kim@email.com", "phone": "+1-206-555-0404", "status": "hired", "match_score": 98, "ai_insights": {"match_score": 98, "summary": "Outstanding match. 8 years React mastery, Vite plugin author, Microsoft design system lead.", "good_points": ["8 years React mastery", "Vite plugin author", "Team lead"], "missing_points": [], "recommendation_label": "Strong Fit", "interview_questions": ["How did you scale your design system to support 50+ engineers?"]}, "created_at": datetime.utcnow()},
+                {"name": "Aisha Patel", "email": "aisha.patel@email.com", "phone": "+1-617-555-0505", "status": "new", "match_score": 54, "ai_insights": {"match_score": 54, "summary": "Backend developer transitioning to full-stack. Python/Django expert, React skills foundational.", "good_points": ["Strong problem solving", "Python/Django background"], "missing_points": ["React < 1 year", "No TypeScript", "No GraphQL"], "recommendation_label": "Moderate Fit", "interview_questions": ["What's your plan to deepen your React expertise?"]}, "created_at": datetime.utcnow()},
+            ]
+            for c in demo_candidates:
                 c["applied_job_id"] = str(first_job["_id"])
                 c["recruiter_id"] = recruiter_id
                 c["resume_text"] = CANDIDATE_RESUMES.get(c["name"], "(No resume available)")
-            await db.candidates.insert_many(DEMO_CANDIDATES)
-            print(f"  Inserted {len(DEMO_CANDIDATES)} demo candidates with resume text")
+            await db.candidates.insert_many(demo_candidates)
+            print(f"  Inserted {len(demo_candidates)} demo candidates with resume text")
         else:
             print(f"  Patching resume_text for existing candidates without it...")
             patched = 0
