@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FileText, CheckCircle, Mail, Phone, User, 
   ArrowRight, Loader2, Sparkles, AlertCircle, UploadCloud, ChevronLeft
