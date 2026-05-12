@@ -227,4 +227,4 @@ Demo credentials: `demo@hireflow.ai` / `demo1234`
 
 ## License
 
-MIT © 2026 HireFlow AI
+@kaanectinnovations © 2026 HireFlow AI
