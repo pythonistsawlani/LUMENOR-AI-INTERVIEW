@@ -20,8 +20,9 @@ class UserOut(BaseModel):
     role: str
     created_at: datetime
     
-    class Config:
-        populate_by_name = True
+    model_config = {
+        "populate_by_name": True
+    }
 
 class JobBase(BaseModel):
     title: str
@@ -41,8 +42,9 @@ class JobOut(JobBase):
     recruiter_id: str
     created_at: datetime
     
-    class Config:
-        populate_by_name = True
+    model_config = {
+        "populate_by_name": True
+    }
 
 class CandidateBase(BaseModel):
     name: str
@@ -68,5 +70,6 @@ class CandidateOut(CandidateBase):
     ai_insights: Optional[AIInsights] = None
     created_at: datetime
 
-    class Config:
-        populate_by_name = True
+    model_config = {
+        "populate_by_name": True
+    }
