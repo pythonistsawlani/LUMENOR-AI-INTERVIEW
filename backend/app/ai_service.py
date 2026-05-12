@@ -28,7 +28,7 @@ def _extract_json(text: str) -> dict:
 class ResumeAI:
     def __init__(self):
         self.token = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
-        self.model = os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        self.model = os.getenv("HF_MODEL", "Qwen/Qwen2.5-72B-Instruct")
         self.client = InferenceClient(model=self.model, token=self.token)
 
     def analyze_resume(self, resume_text: str, job_description: str, job_requirements: list) -> dict:
@@ -103,7 +103,7 @@ Score the candidate STRICTLY based on how well they match. Be honest and differe
 class InterviewAI:
     def __init__(self):
         self.token = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
-        self.model = os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        self.model = os.getenv("HF_MODEL", "Qwen/Qwen2.5-72B-Instruct")
         self.client = InferenceClient(model=self.model, token=self.token)
 
     async def generate_next_question(

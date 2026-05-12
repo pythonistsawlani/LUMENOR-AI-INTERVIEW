@@ -112,108 +112,154 @@ DEMO_JOBS = [
     },
 ]
 
-DEMO_CANDIDATES = [
-    {
-        "name": "Sophia Zhang",
-        "email": "sophia.zhang@email.com",
-        "phone": "+1-415-555-0101",
-        "status": "interview",
-        "match_score": 96,
-        "ai_insights": {
-            "match_score": 96,
-            "summary": "Sophia is an exceptionally strong match for the Senior Frontend Engineer role. Her 6 years of React experience, TypeScript mastery, and open-source contributions to major UI libraries make her a top-tier candidate. She demonstrates deep knowledge of modern frontend tooling.",
-            "good_points": ["6 years React/TypeScript", "Design system contributor", "GraphQL expertise", "Mentored junior devs"],
-            "missing_points": ["Vite exposure limited"],
-            "recommendation_label": "Strong Fit",
-            "interview_questions": [
-                "Walk me through how you've architected a design system from scratch.",
-                "How do you approach performance optimization in large React applications?",
-                "Describe a time you led a significant frontend refactor. What did you learn?"
-            ]
-        },
-        "created_at": datetime.utcnow(),
-    },
-    {
-        "name": "Marcus Johnson",
-        "email": "marcus.j@email.com",
-        "phone": "+1-312-555-0202",
-        "status": "screening",
-        "match_score": 88,
-        "ai_insights": {
-            "match_score": 88,
-            "summary": "Marcus has solid React experience with 4 years of professional work. His recent projects show good TypeScript adoption and he has built custom hooks extensively. He lacks GraphQL exposure but picks up technologies quickly based on his trajectory.",
-            "good_points": ["4 years React experience", "Custom hooks library author", "Strong CSS/animation skills"],
-            "missing_points": ["No GraphQL experience", "Limited TypeScript on large codebases"],
-            "recommendation_label": "Strong Fit",
-            "interview_questions": [
-                "How do you manage complex state across deeply nested components?",
-                "What's your strategy for handling API data fetching in React?",
-                "How would you approach learning GraphQL if given 2 weeks?"
-            ]
-        },
-        "created_at": datetime.utcnow(),
-    },
-    {
-        "name": "Priya Nair",
-        "email": "priya.nair@email.com",
-        "phone": "+1-650-555-0303",
-        "status": "new",
-        "match_score": 72,
-        "ai_insights": {
-            "match_score": 72,
-            "summary": "Priya has a strong academic background in computer science and 2 years of frontend work. Her portfolio shows clean code and good design sensibility, but she lacks the depth of experience expected for a senior role. She could be a great mid-level hire.",
-            "good_points": ["Clean code practices", "Good eye for design", "Eager learner"],
-            "missing_points": ["Only 2 years experience", "No TypeScript at scale", "No GraphQL", "Limited team leadership"],
-            "recommendation_label": "Moderate Fit",
-            "interview_questions": [
-                "Tell me about the most complex UI component you've built.",
-                "How have you contributed to code reviews in your current team?",
-                "Where do you see yourself in your frontend career in 2 years?"
-            ]
-        },
-        "created_at": datetime.utcnow(),
-    },
-    {
-        "name": "Daniel Kim",
-        "email": "d.kim@email.com",
-        "phone": "+1-206-555-0404",
-        "status": "hired",
-        "match_score": 98,
-        "ai_insights": {
-            "match_score": 98,
-            "summary": "Daniel is an outstanding match. He brings 8 years of React expertise, has shipped design systems used by over 50 engineers, and his work on open source Vite plugins directly aligns with our tech stack. A rare find.",
-            "good_points": ["8 years React mastery", "Vite plugin author", "Design system at scale", "GraphQL + TypeScript expert", "Team lead experience"],
-            "missing_points": [],
-            "recommendation_label": "Strong Fit",
-            "interview_questions": [
-                "How did you scale your design system to support 50+ engineers?",
-                "What's your approach to maintaining backward compatibility in public APIs?",
-                "Tell me about a time you had to make a hard architectural decision."
-            ]
-        },
-        "created_at": datetime.utcnow(),
-    },
-    {
-        "name": "Aisha Patel",
-        "email": "aisha.patel@email.com",
-        "phone": "+1-617-555-0505",
-        "status": "new",
-        "match_score": 54,
-        "ai_insights": {
-            "match_score": 54,
-            "summary": "Aisha comes from a backend-heavy background and is transitioning into full-stack work. Her React skills are foundational and she would need significant ramp-up time. She shows strong problem-solving ability but is not ready for a senior frontend role at this time.",
-            "good_points": ["Strong problem solving", "Python/Django background", "Motivated to learn"],
-            "missing_points": ["React experience <1 year", "No TypeScript", "No GraphQL", "No design system experience", "Limited CSS skills"],
-            "recommendation_label": "Weak Fit",
-            "interview_questions": [
-                "What's your plan to deepen your React expertise?",
-                "How do you approach learning a new frontend framework?",
-                "Describe your most complex web project."
-            ]
-        },
-        "created_at": datetime.utcnow(),
-    },
-]
+CANDIDATE_RESUMES = {
+    "Sophia Zhang": """SOPHIA ZHANG
+Frontend Engineer | San Francisco, CA
+sophia.zhang@email.com | +1-415-555-0101 | github.com/sophiazhang
+
+SUMMARY
+Senior Frontend Engineer with 6+ years of experience building scalable, high-performance web applications. Expert in React, TypeScript, and modern frontend tooling. Open-source contributor to major UI component libraries. Passionate about design systems, developer experience, and accessibility.
+
+EXPERIENCE
+Senior Frontend Engineer — Stripe, San Francisco (2021–Present)
+• Led redesign of Stripe Dashboard used by 2M+ businesses, improving key task completion by 34%
+• Architected a company-wide component library (150+ components) adopted across 6 product teams
+• Drove adoption of GraphQL across frontend, reducing API over-fetching by 60%
+• Mentored 4 junior engineers; led weekly frontend guild meetings
+
+Frontend Engineer — Figma, San Francisco (2019–2021)
+• Built the plugin marketplace UI, supporting 1M+ monthly active users
+• Implemented real-time collaborative cursors feature using WebSockets and React context
+• Optimized bundle size by 40% through code splitting and tree shaking
+
+EDUCATION
+B.S. Computer Science — Stanford University (2019)
+
+SKILLS
+React, TypeScript, GraphQL, Next.js, Vite, TailwindCSS, Storybook, Jest, Cypress, WebSockets, Figma
+
+OPEN SOURCE
+• react-spectrum contributor (500+ GitHub stars on personal forks)
+• Author of ts-hooks-utils (npm: 45k weekly downloads)""",
+
+    "Marcus Johnson": """MARCUS JOHNSON
+Frontend Developer | Chicago, IL
+marcus.j@email.com | +1-312-555-0202
+
+SUMMARY
+Creative frontend developer with 4 years of professional experience. Specialized in building interactive UIs with React and modern CSS. Known for pixel-perfect implementation and smooth animations. Currently expanding into TypeScript and state management at scale.
+
+EXPERIENCE
+Frontend Developer — Shopify (Remote) (2022–Present)
+• Built merchant-facing analytics dashboard used by 80k+ stores
+• Authored a custom React hooks library (useShopify) used across 3 internal teams
+• Implemented complex animations with Framer Motion, reducing designer handoff time by 50%
+
+Junior Frontend Developer — Accenture, Chicago (2021–2022)
+• Developed responsive UI components for Fortune 500 clients in React
+• Collaborated with UX team on accessibility audit, achieving WCAG 2.1 AA compliance
+• Integrated REST APIs for real-time data dashboards
+
+EDUCATION
+B.S. Information Technology — DePaul University (2020)
+
+SKILLS
+React, JavaScript, CSS/Sass, Framer Motion, Webpack, Redux Toolkit, REST APIs, Git, Figma
+
+PROJECTS
+• custom-hooks-library (GitHub: 200 stars) — reusable React hooks for common UI patterns
+• anime-tracker — personal project: Next.js + TailwindCSS anime discovery app""",
+
+    "Priya Nair": """PRIYA NAIR
+Frontend Developer | Palo Alto, CA
+priya.nair@email.com | +1-650-555-0303
+
+SUMMARY
+Frontend developer with 2 years of experience and strong academic foundation in computer science. Passionate about clean code, accessibility, and design-driven development. Quick learner eager to grow into a senior role.
+
+EXPERIENCE
+Frontend Developer — TechBridge Inc., Palo Alto (2023–Present)
+• Built UI for an internal project management tool using React and Tailwind CSS
+• Implemented dark mode, responsive layouts, and ARIA-compliant components
+• Participated in weekly code reviews and sprint planning
+
+Intern — Google, Mountain View (Summer 2022)
+• Contributed to the Google Workspace design system documentation site
+• Fixed 12 accessibility bugs in the internal component library
+• Presented demo at intern showcase to 80+ attendees
+
+EDUCATION
+B.S. Computer Science — UC San Diego (2022) | GPA: 3.8/4.0
+
+SKILLS
+React, JavaScript, TypeScript (beginner), HTML5, CSS3, TailwindCSS, Git, Figma
+
+PROJECTS
+• portfolio-site — Personal portfolio built with Next.js, deployed on Vercel
+• weather-app — React weather app using OpenWeather API with unit tests""",
+
+    "Daniel Kim": """DANIEL KIM
+Principal Frontend Engineer | Seattle, WA
+d.kim@email.com | +1-206-555-0404 | github.com/danielkim-dev
+
+SUMMARY
+Principal Frontend Engineer with 8+ years of experience leading complex frontend architecture at scale. Creator of open-source Vite plugins with 50k+ downloads. Expert in React, TypeScript, GraphQL, and design systems. Led teams of 10+ engineers.
+
+EXPERIENCE
+Principal Frontend Engineer — Microsoft, Seattle (2020–Present)
+• Led frontend architecture for Azure DevOps, serving 6M+ developers worldwide
+• Built and maintained the Microsoft Fluent Design System (React), used by 50+ engineering teams
+• Authored and published 3 Vite plugins (collective npm downloads: 50k/week)
+• Established frontend interview process and leveling guidelines across org
+
+Senior Frontend Engineer — Amazon, Seattle (2018–2020)
+• Led React migration of Amazon Seller Central, a platform used by 2M+ sellers
+• Designed the GraphQL API schema for seller analytics, adopted across 4 teams
+• Mentored team of 8 engineers; ran biweekly technical talks
+
+Software Engineer — Facebook, Menlo Park (2016–2018)
+• Worked on Facebook News Feed frontend, supporting 1B+ daily users
+• Built A/B testing framework for frontend experiments (React)
+
+EDUCATION
+B.S. Computer Science — MIT (2016) | GPA: 3.9/4.0
+
+SKILLS
+React, TypeScript, GraphQL, Vite, Next.js, Webpack, Jest, Cypress, Node.js, Rust (learning), Figma, System Design
+
+OPEN SOURCE
+• vite-plugin-federation (50k npm downloads/week)
+• react-query-devtools contributor""",
+
+    "Aisha Patel": """AISHA PATEL
+Software Developer (Backend → Full Stack Transition) | Boston, MA
+aisha.patel@email.com | +1-617-555-0505
+
+SUMMARY
+Backend-focused developer with 3 years of Python/Django experience, actively transitioning into full-stack development. Built REST APIs and data pipelines at scale. Currently learning React and TypeScript through personal projects and online courses.
+
+EXPERIENCE
+Backend Developer — HubSpot, Boston (2022–Present)
+• Developed and maintained Django REST APIs serving 10M+ API requests/day
+• Built data pipelines using Celery and Redis for async task processing
+• Collaborated with frontend teams to design API contracts
+
+Junior Developer — Infosys (Remote) (2021–2022)
+• Maintained Python data processing scripts for financial clients
+• Wrote unit tests achieving 85% code coverage
+• Participated in Agile sprints and daily standups
+
+EDUCATION
+B.S. Computer Science — Northeastern University (2021)
+
+SKILLS
+Python, Django, FastAPI, PostgreSQL, Redis, Celery, REST APIs, Git, Docker
+(Learning): React, TypeScript, HTML/CSS, TailwindCSS
+
+PROJECTS
+• django-blog-api — Full REST API with JWT auth (GitHub: 45 stars)
+• react-todo (WIP) — First React project, learning hooks and state management""",
+}
 
 
 async def seed():
@@ -224,7 +270,11 @@ async def seed():
     if existing:
         recruiter_id = str(existing["_id"])
         print(f"  Demo recruiter already exists (id: {recruiter_id})")
+        # Ensure is_verified is set
+        await db.users.update_one({"_id": existing["_id"]}, {"$set": {"is_verified": True, "company_name": "HireFlow Demo Co."}})
     else:
+        DEMO_RECRUITER["is_verified"] = True
+        DEMO_RECRUITER["company_name"] = "HireFlow Demo Co."
         result = await db.users.insert_one(DEMO_RECRUITER)
         recruiter_id = str(result.inserted_id)
         print(f"  Created demo recruiter (id: {recruiter_id})")
@@ -242,15 +292,27 @@ async def seed():
     # Link candidates to first job
     first_job = await db.jobs.find_one({"recruiter_id": recruiter_id})
     if first_job:
-        existing_candidates = await db.candidates.count_documents({})
+        existing_candidates = await db.candidates.count_documents({"recruiter_id": recruiter_id})
         if existing_candidates == 0:
             for c in DEMO_CANDIDATES:
                 c["applied_job_id"] = str(first_job["_id"])
-                c["resume_text"] = "(Demo candidate — no real resume)"
+                c["recruiter_id"] = recruiter_id
+                c["resume_text"] = CANDIDATE_RESUMES.get(c["name"], "(No resume available)")
             await db.candidates.insert_many(DEMO_CANDIDATES)
-            print(f"  Inserted {len(DEMO_CANDIDATES)} demo candidates")
+            print(f"  Inserted {len(DEMO_CANDIDATES)} demo candidates with resume text")
         else:
-            print(f"  Demo candidates already exist ({existing_candidates} found)")
+            print(f"  Patching resume_text for existing candidates without it...")
+            patched = 0
+            async for c in db.candidates.find({"recruiter_id": recruiter_id, "resume_text": {"$in": [None, "", "(Demo candidate — no real resume)"]}}):
+                name = c.get("name", "")
+                resume = CANDIDATE_RESUMES.get(name)
+                if resume:
+                    await db.candidates.update_one({"_id": c["_id"]}, {"$set": {"resume_text": resume}})
+                    patched += 1
+            if patched:
+                print(f"  Patched {patched} candidate(s) with real resume text")
+            else:
+                print(f"  All candidates already have resume text ({existing_candidates} total)")
 
     print("\nSeed complete!")
     print("   Demo Login → email: demo@hireflow.ai  |  password: demo1234")
