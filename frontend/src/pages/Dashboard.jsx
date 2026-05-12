@@ -60,10 +60,10 @@ export default function Dashboard() {
   });
 
   const pipeline = useMemo(() => {
-    const grouped = { new: [], screening: [], interview: [], hired: [] };
+    const grouped = { new: [], screening: [], interview: [], interviewed: [], hired: [] };
     if (candidates) {
       candidates.forEach(c => {
-        if (grouped[c.status]) grouped[c.status].push(c);
+        if (grouped[c.status] !== undefined) grouped[c.status].push(c);
       });
     }
     return grouped;
@@ -253,6 +253,7 @@ export default function Dashboard() {
                       <KanbanColumn title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                       <KanbanColumn title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                       <KanbanColumn title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanColumn title="Interviewed ✓" status="interviewed" items={pipeline.interviewed} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                       <KanbanColumn title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                     </div>
                   )}

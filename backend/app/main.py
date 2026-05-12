@@ -1,6 +1,7 @@
 import os
 import hashlib
 import uuid
+import asyncio
 import smtplib
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,7 +76,8 @@ def _generate_numeric_code() -> str:
     return str(uuid.uuid4().int % 1000000).zfill(6)
 
 
-async def _send_email(to_email: str, subject: str, body: str) -> bool:
+def _send_email_sync(to_email: str, subject: str, body: str) -> bool:
+    """Synchronous SMTP sender — safe to run in thread pool."""
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_username = os.getenv("SMTP_USERNAME")
@@ -95,6 +97,15 @@ async def _send_email(to_email: str, subject: str, body: str) -> bool:
         server.login(smtp_username, smtp_password)
         server.sendmail(smtp_from, [to_email], msg.as_string())
     return True
+
+
+async def _send_email(to_email: str, subject: str, body: str) -> bool:
+    """Non-blocking wrapper — runs SMTP in thread pool."""
+    try:
+        return await asyncio.to_thread(_send_email_sync, to_email, subject, body)
+    except Exception as exc:
+        print(f"[Email Error] {exc}")
+        return False
 
 @app.get("/api/health")
 async def health():
@@ -200,7 +211,7 @@ async def get_public_job(job_id: str):
 
 
 @app.post("/api/public/jobs/{job_id}/request-code")
-async def request_apply_code(job_id: str, payload: dict):
+async def request_apply_code(job_id: str, payload: dict, background_tasks: BackgroundTasks):
     db = await get_db()
     job = await db.jobs.find_one({"_id": parse_object_id(job_id, "job_id"), "status": "open"})
     if not job:
@@ -228,10 +239,12 @@ async def request_apply_code(job_id: str, payload: dict):
         },
         upsert=True,
     )
-    await _send_email(
-        to_email=email,
-        subject=f"Your verification code for {job['title']}",
-        body=f"Hi {name},\n\nYour HireFlow verification code is: {code}\nThis code expires in 10 minutes.",
+    # Run email in background — response returns immediately
+    background_tasks.add_task(
+        _send_email_sync,
+        email,
+        f"Your verification code for {job['title']}",
+        f"Hi {name},\n\nYour HireFlow verification code is: {code}\nThis code expires in 10 minutes.",
     )
     return {"message": "Verification code sent"}
 

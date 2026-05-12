@@ -1,11 +1,12 @@
 import hashlib
+import asyncio
 import os
 import smtplib
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks
 from app.db import get_db
 from app.schemas import (
     InterviewSessionCreate,
@@ -46,7 +47,7 @@ async def _get_owned_candidate_and_job(db, candidate_id: str, job_id: str, recru
     return candidate, job
 
 
-async def _send_interview_email(candidate_email: str, candidate_name: str, job_title: str, interview_url: str):
+def _send_interview_email_sync(candidate_email: str, candidate_name: str, job_title: str, interview_url: str) -> bool:
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_username = os.getenv("SMTP_USERNAME")
@@ -76,8 +77,14 @@ async def _send_interview_email(candidate_email: str, candidate_name: str, job_t
         server.starttls()
         server.login(smtp_username, smtp_password)
         server.sendmail(smtp_from, [candidate_email], msg.as_string())
-
     return True
+
+
+async def _send_interview_email(candidate_email: str, candidate_name: str, job_title: str, interview_url: str):
+    try:
+        await asyncio.to_thread(_send_interview_email_sync, candidate_email, candidate_name, job_title, interview_url)
+    except Exception as exc:
+        print(f"[Interview Email Error] {exc}")
 
 
 def _serialize_session(session, candidate=None, job=None):
@@ -145,6 +152,7 @@ async def generate_interview_session(
 @router.post("/invite", response_model=InterviewInviteOut)
 async def create_interview_invite(
     invite_data: InterviewInviteCreate,
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(get_current_user),
 ):
     db = await get_db()
@@ -159,11 +167,13 @@ async def create_interview_invite(
     )
 
     interview_url = f"{FRONTEND_BASE_URL}/interview/{session['_id']}?token={plain_token}"
-    await _send_interview_email(
-        candidate_email=session["candidate_email"],
-        candidate_name=session["candidate_name"] or "Candidate",
-        job_title=session["job_title"] or "the role",
-        interview_url=interview_url,
+    # Send email in background — response returns immediately
+    background_tasks.add_task(
+        _send_interview_email_sync,
+        session["candidate_email"],
+        session["candidate_name"] or "Candidate",
+        session["job_title"] or "the role",
+        interview_url,
     )
 
     return {"session_id": session["_id"], "interview_url": interview_url, "expires_at": expires_at}
