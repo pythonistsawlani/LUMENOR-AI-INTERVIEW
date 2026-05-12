@@ -1,16 +1,28 @@
 import os
+import ssl
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(
-    MONGO_URI,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=5000,
-    socketTimeoutMS=10000,
+
+# Base timeout options
+client_options = dict(
+    serverSelectionTimeoutMS=30000,
+    connectTimeoutMS=30000,
+    socketTimeoutMS=30000,
+    retryWrites=True,
 )
+
+if MONGO_URI.startswith("mongodb+srv://") or "mongodb.net" in MONGO_URI:
+    # Explicit TLS configuration for cloud deployments (Render, Railway, etc.)
+    client_options["tls"] = True
+    client_options["tlsCAFile"] = certifi.where()
+    client_options["tlsAllowInvalidCertificates"] = False
+
+client = AsyncIOMotorClient(MONGO_URI, **client_options)
 db = client.hireflow_db
 
 async def get_db():
