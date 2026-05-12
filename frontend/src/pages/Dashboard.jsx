@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, UserPlus, CheckCircle, Clock, 
   Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox, Mail, Copy,
-  X, ExternalLink, ChevronRight, Filter, SortDesc, TrendingUp, BrainCircuit
+  X, ExternalLink, ChevronRight, Filter, SortDesc, TrendingUp, BrainCircuit, AlertCircle, Briefcase, Loader2,
+  Building, LayoutDashboard
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
 import { useAuth } from '../context/AuthContext';
@@ -73,8 +74,8 @@ export default function Dashboard() {
   const filteredCandidates = useMemo(() => {
     if (!candidates) return [];
     return candidates.filter(c => 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.email || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [candidates, searchQuery]);
 
@@ -131,10 +132,10 @@ export default function Dashboard() {
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
             <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-400">
-              {user?.name?.charAt(0).toUpperCase()}
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{user?.name}</p>
+              <p className="text-xs font-bold text-white truncate">{user?.name || 'User'}</p>
               <p className="text-[10px] text-slate-500 truncate">{user?.company_name || 'Personal Account'}</p>
             </div>
             <button onClick={logout} className="text-slate-500 hover:text-rose-400 transition-colors">
@@ -155,16 +156,16 @@ export default function Dashboard() {
                 placeholder="Search candidates..." 
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all text-white"
               />
             </div>
             
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-500" />
+            <div className="flex items-center gap-2 text-slate-300">
+              <Filter className="w-4 h-4" />
               <select 
                 value={activeJobId} 
                 onChange={e => setActiveJobId(e.target.value)}
-                className="bg-transparent text-sm text-slate-300 focus:outline-none cursor-pointer hover:text-white"
+                className="bg-transparent text-sm focus:outline-none cursor-pointer hover:text-white appearance-none"
               >
                 <option value="" className="bg-[#0F172A]">All Job Roles</option>
                 {jobs?.map(job => (
@@ -191,10 +192,10 @@ export default function Dashboard() {
                 <motion.div key="pipeline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
                   {/* Pipeline Quick Stats */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <StatCard title="Total Candidates" value={candidates?.length || 0} icon={<Users />} color="indigo" />
-                    <StatCard title="Interviewed" value={pipeline.interviewed.length} icon={<BrainCircuit />} color="purple" />
-                    <StatCard title="Average Match" value={analytics?.avg_match_score ? `${analytics.avg_match_score}%` : 'N/A'} icon={<TrendingUp />} color="emerald" />
-                    <StatCard title="Active Jobs" value={jobs?.length || 0} icon={<Briefcase />} color="amber" />
+                    <StatCard title="Total Candidates" value={candidates?.length || 0} icon={<Users className="w-4 h-4" />} color="indigo" />
+                    <StatCard title="Interviewed" value={pipeline.interviewed.length} icon={<BrainCircuit className="w-4 h-4" />} color="purple" />
+                    <StatCard title="Average Match" value={analytics?.avg_match_score ? `${analytics.avg_match_score}%` : 'N/A'} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
+                    <StatCard title="Active Jobs" value={jobs?.length || 0} icon={<Briefcase className="w-4 h-4" />} color="amber" />
                   </div>
 
                   {/* Public Links Banner */}
@@ -341,7 +342,7 @@ function StatCard({ title, value, icon, color }) {
   };
   return (
     <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md relative overflow-hidden group">
-      <div className={`absolute top-4 right-4 p-2 rounded-lg ${colors[color]} border`}>
+      <div className={`absolute top-4 right-4 p-2 rounded-lg ${colors[color] || colors.indigo} border`}>
         {icon}
       </div>
       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{title}</p>
@@ -373,7 +374,7 @@ function KanbanCol({ title, status, items, onDragStart, onDrop, onDragOver, onSe
 }
 
 function CandidateCard({ candidate, onDragStart, onClick, onInvite, inviteLoading }) {
-  const { name, match_score, ai_insights } = candidate;
+  const { name = 'Unknown', match_score, ai_insights } = candidate;
   const color = match_score >= 80 ? 'emerald' : match_score >= 60 ? 'amber' : 'rose';
   
   return (
@@ -388,11 +389,13 @@ function CandidateCard({ candidate, onDragStart, onClick, onInvite, inviteLoadin
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-xs font-bold text-white border border-white/10">
-            {name.charAt(0).toUpperCase()}
+            {name?.charAt(0).toUpperCase() || 'C'}
           </div>
           <div className="min-w-0">
             <h4 className="text-sm font-bold text-white truncate max-w-[140px]">{name}</h4>
-            <p className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">Applied: {new Date(candidate.created_at).toLocaleDateString()}</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">
+              Applied: {candidate.created_at ? new Date(candidate.created_at).toLocaleDateString() : 'Unknown'}
+            </p>
           </div>
         </div>
         {match_score !== null && (
@@ -433,6 +436,7 @@ function CandidateCard({ candidate, onDragStart, onClick, onInvite, inviteLoadin
 }
 
 function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
+  const name = candidate?.name || 'Unknown Candidate';
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
@@ -457,12 +461,12 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
 
           <div className="flex items-center gap-6 mb-10">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
-              {candidate.name.charAt(0).toUpperCase()}
+              {name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-3xl font-black text-white">{candidate.name}</h2>
+              <h2 className="text-3xl font-black text-white">{name}</h2>
               <p className="text-slate-400 flex items-center gap-2 mt-1">
-                <Mail className="w-4 h-4" /> {candidate.email}
+                <Mail className="w-4 h-4" /> {candidate?.email || 'N/A'}
               </p>
             </div>
           </div>
@@ -470,13 +474,13 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
           <div className="grid grid-cols-2 gap-4 mb-10">
             <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Match Score</p>
-              <p className={`text-2xl font-black ${candidate.match_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {candidate.match_score}%
+              <p className={`text-2xl font-black ${candidate?.match_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {candidate?.match_score || 0}%
               </p>
             </div>
             <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Recommendation</p>
-              <p className="text-sm font-bold text-white">{candidate.ai_insights?.recommendation_label || 'Processing'}</p>
+              <p className="text-sm font-bold text-white">{candidate?.ai_insights?.recommendation_label || 'Processing'}</p>
             </div>
           </div>
 
@@ -484,7 +488,7 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
             <div>
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400 mb-4">AI Analysis Summary</h3>
               <p className="text-slate-300 leading-relaxed text-sm bg-indigo-500/5 border border-indigo-500/10 p-5 rounded-2xl italic">
-                "{candidate.ai_insights?.summary}"
+                "{candidate?.ai_insights?.summary || 'No summary available.'}"
               </p>
             </div>
 
@@ -492,9 +496,9 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
               <div>
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-emerald-400 mb-4">Key Strengths</h3>
                 <ul className="space-y-3">
-                  {candidate.ai_insights?.good_points?.map((p, i) => (
+                  {candidate?.ai_insights?.good_points?.map((p, i) => (
                     <li key={i} className="flex gap-2 text-xs text-slate-300 leading-tight">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" /> {p}
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" /> {p}
                     </li>
                   ))}
                 </ul>
@@ -502,7 +506,7 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
               <div>
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-rose-400 mb-4">Missing Skills</h3>
                 <ul className="space-y-3">
-                  {candidate.ai_insights?.missing_points?.map((p, i) => (
+                  {candidate?.ai_insights?.missing_points?.map((p, i) => (
                     <li key={i} className="flex gap-2 text-xs text-slate-300 leading-tight">
                       <AlertCircle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" /> {p}
                     </li>
@@ -514,7 +518,7 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
             <div>
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-purple-400 mb-4">Recommended Questions</h3>
               <div className="space-y-3">
-                {candidate.ai_insights?.interview_questions?.map((q, i) => (
+                {candidate?.ai_insights?.interview_questions?.map((q, i) => (
                   <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-300">
                     {q}
                   </div>
@@ -538,6 +542,3 @@ function KanbanSkeleton() {
     </div>
   );
 }
-
-function CheckCircle2(props) { return <CheckCircle {...props} /> }
-function AlertCircle(props) { return <X className="text-rose-500" {...props} /> }

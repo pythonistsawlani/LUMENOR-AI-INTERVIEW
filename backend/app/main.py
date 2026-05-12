@@ -191,7 +191,11 @@ async def verify_signup(payload: VerifyOTP):
     if otp_doc["otp_hash"] != _hash_value(payload.otp):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
+    # Mark user as verified if they weren't already
     await db.users.update_one({"email": payload.email}, {"$set": {"is_verified": True}})
+    
+    user = await db.users.find_one({"email": payload.email})
+    access_token = create_access_token(data={"sub": str(user["_id"])})
     await db.otps.delete_one({"_id": otp_doc["_id"]})
     
     return {"message": "Account verified successfully. You can now login."}
@@ -204,9 +208,8 @@ async def login(payload: UserLogin, background_tasks: BackgroundTasks):
     if not user or not verify_password(payload.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    if not user.get("is_verified", False):
-        raise HTTPException(status_code=403, detail="Email not verified")
-
+    # Allow unverified users to proceed with login OTP. 
+    # Verifying the login OTP will automatically verify the account.
     otp = await _create_otp(payload.email, "login")
     background_tasks.add_task(
         _send_email_sync,
@@ -215,7 +218,10 @@ async def login(payload: UserLogin, background_tasks: BackgroundTasks):
         f"Your HireFlow login code is: {otp}\nExpires in 10 minutes."
     )
     
-    return {"message": "OTP sent to your email"}
+    return {
+        "message": "OTP sent to your email",
+        "is_verified": user.get("is_verified", False)
+    }
 
 @app.post("/api/auth/verify-login", response_model=Token)
 async def verify_login(payload: VerifyOTP):
