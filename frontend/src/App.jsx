@@ -7,6 +7,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Settings = lazy(() => import('./pages/Settings'));
 const InterviewSession = lazy(() => import('./pages/InterviewSession'));
 const CandidateApply = lazy(() => import('./pages/CandidateApply'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -35,6 +36,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <Dashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/settings" 
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
                       </ProtectedRoute>
                     } 
                   />

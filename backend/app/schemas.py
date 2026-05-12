@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
 
+# --- AUTH SCHEMAS ---
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -11,18 +13,41 @@ class UserCreate(BaseModel):
     name: str
     email: EmailStr
     password: str
-    role: str = "recruiter" # recruiter or candidate
+    company_name: Optional[str] = None
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class VerifyOTP(BaseModel):
+    email: EmailStr
+    otp: str
 
 class UserOut(BaseModel):
     id: str = Field(alias="_id")
     name: str
     email: EmailStr
-    role: str
+    company_name: Optional[str] = None
+    company_logo: Optional[str] = None
+    is_verified: bool = False
+    role: str = "recruiter"
     created_at: datetime
+    last_login: Optional[datetime] = None
     
     model_config = {
         "populate_by_name": True
     }
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    company_name: Optional[str] = None
+    company_logo: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+# --- JOB SCHEMAS ---
 
 class JobBase(BaseModel):
     title: str
@@ -45,6 +70,8 @@ class JobOut(JobBase):
     model_config = {
         "populate_by_name": True
     }
+
+# --- CANDIDATE SCHEMAS ---
 
 class CandidateBase(BaseModel):
     name: str
@@ -74,6 +101,8 @@ class CandidateOut(CandidateBase):
         "populate_by_name": True
     }
 
+# --- INTERVIEW SCHEMAS ---
+
 class InterviewMessage(BaseModel):
     role: str # user or assistant
     content: str
@@ -99,7 +128,7 @@ class InterviewSessionOut(BaseModel):
     id: str = Field(alias="_id")
     candidate_id: str
     job_id: str
-    status: str = "ongoing" # ongoing, completed
+    status: str = "ongoing" # ongoing, invited, completed
     history: List[InterviewMessage] = []
     final_report: Optional[str] = None
     candidate_name: Optional[str] = None

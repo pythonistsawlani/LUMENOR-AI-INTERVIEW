@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, UserPlus, CheckCircle, Clock, 
-  Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox, Mail, Copy
+  Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox, Mail, Copy,
+  X, ExternalLink, ChevronRight, Filter, SortDesc, TrendingUp, BrainCircuit
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api';
@@ -16,12 +17,17 @@ import UploadResumeModal from '../components/UploadResumeModal';
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
   const [isJobModalOpen, setJobModalOpen] = useState(false);
   const [isResumeModalOpen, setResumeModalOpen] = useState(false);
   const [activeJobId, setActiveJobId] = useState('');
-  const [activeTab, setActiveTab] = useState('pipeline'); // 'pipeline' or 'analytics'
+  const [activeTab, setActiveTab] = useState('pipeline');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
+  // Queries
   const { data: jobs, isLoading: jobsLoading } = useQuery({
     queryKey: ['myJobs'],
     queryFn: () => api.get('/my-jobs').then(res => res.data)
@@ -35,14 +41,20 @@ export default function Dashboard() {
     }
   });
 
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['analytics-summary'],
+    queryFn: () => api.get('/analytics/summary').then(res => res.data),
+    enabled: activeTab === 'analytics'
+  });
+
+  // Mutations
   const updateStatusMutation = useMutation({
     mutationFn: ({ candidateId, status }) => 
       api.patch(`/candidates/${candidateId}/status?status=${status}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      addToast('Candidate status updated successfully');
-    },
-    onError: () => addToast('Failed to update status', 'error')
+      addToast('Candidate moved', 'success');
+    }
   });
 
   const sendInviteMutation = useMutation({
@@ -51,425 +63,481 @@ export default function Dashboard() {
         candidate_id: candidateId,
         job_id: jobId,
         difficulty: 'medium',
-        total_questions: 6,
-        focus_areas: [],
-        custom_instructions: ''
+        total_questions: 6
       }),
-    onSuccess: () => addToast('Interview link generated and emailed to candidate.', 'success'),
+    onSuccess: () => addToast('Interview invite sent!', 'success'),
     onError: (err) => addToast(err?.response?.data?.detail || 'Failed to send invite', 'error')
   });
 
+  // Filtered Candidates
+  const filteredCandidates = useMemo(() => {
+    if (!candidates) return [];
+    return candidates.filter(c => 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [candidates, searchQuery]);
+
   const pipeline = useMemo(() => {
     const grouped = { new: [], screening: [], interview: [], interviewed: [], hired: [] };
-    if (candidates) {
-      candidates.forEach(c => {
-        if (grouped[c.status] !== undefined) grouped[c.status].push(c);
-      });
-    }
+    filteredCandidates.forEach(c => {
+      if (grouped[c.status] !== undefined) grouped[c.status].push(c);
+    });
     return grouped;
-  }, [candidates]);
+  }, [filteredCandidates]);
 
-  // Analytics Data Prep
-  const funnelData = useMemo(() => [
-    { name: 'Applied', value: pipeline.new.length },
-    { name: 'Screening', value: pipeline.screening.length },
-    { name: 'Interview', value: pipeline.interview.length },
-    { name: 'Hired', value: pipeline.hired.length }
-  ], [pipeline]);
-
-  const distributionData = useMemo(() => {
-    let strong = 0, moderate = 0, weak = 0, processing = 0;
-    if (candidates) {
-      candidates.forEach(c => {
-        if (!c.ai_insights) processing++;
-        else if (c.match_score >= 80) strong++;
-        else if (c.match_score >= 60) moderate++;
-        else weak++;
-      });
-    }
-    return [
-      { name: 'Strong Fit (80-100)', count: strong, fill: '#10b981' },
-      { name: 'Moderate Fit (60-79)', count: moderate, fill: '#f59e0b' },
-      { name: 'Weak Fit (<60)', count: weak, fill: '#f43f5e' },
-      { name: 'Processing', count: processing, fill: '#6366f1' }
-    ];
-  }, [candidates]);
-
-  const handleDragStart = (e, candidateId) => {
-    e.dataTransfer.setData('candidateId', candidateId);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
+  // Drag & Drop
+  const handleDragStart = (e, candidateId) => e.dataTransfer.setData('candidateId', candidateId);
+  const handleDragOver = (e) => e.preventDefault();
   const handleDrop = (e, status) => {
     const candidateId = e.dataTransfer.getData('candidateId');
-    if (candidateId) {
-      updateStatusMutation.mutate({ candidateId, status });
-    }
+    if (candidateId) updateStatusMutation.mutate({ candidateId, status });
   };
 
   const copyApplyLink = async (jobId) => {
     const link = `${window.location.origin}/apply/${jobId}`;
     try {
       await navigator.clipboard.writeText(link);
-      addToast('Apply link copied');
+      addToast('Apply link copied', 'success');
     } catch {
-      addToast('Could not copy link', 'error');
+      addToast('Failed to copy', 'error');
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-50 font-sans selection:bg-indigo-500/30 overflow-hidden flex">
-      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none" />
+    <div className="min-h-screen bg-[#020617] text-slate-50 flex overflow-hidden">
+      {/* Background Orbs */}
+      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none" />
 
-      {/* Sidebar Navigation */}
-      <aside className="w-64 flex-shrink-0 border-r border-white/10 bg-white/5 backdrop-blur-xl relative z-20 flex flex-col hidden md:flex">
+      {/* Desktop Sidebar */}
+      <aside className="w-64 flex-shrink-0 border-r border-white/10 bg-white/5 backdrop-blur-2xl flex flex-col hidden lg:flex relative z-30">
         <div className="h-16 flex items-center px-6 border-b border-white/10">
           <Link to="/" className="flex items-center gap-2 group">
-             <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(79,70,229,0.5)] transition-all">
-               <span className="text-white text-xs font-bold">H</span>
-             </div>
-             <span className="font-semibold tracking-tight text-white group-hover:text-indigo-400 transition-colors">HireFlow AI</span>
+            <div className="w-7 h-7 rounded bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
+              <span className="text-white text-xs font-bold">H</span>
+            </div>
+            <span className="font-bold tracking-tight text-white group-hover:text-indigo-400 transition-colors">HireFlow AI</span>
           </Link>
         </div>
         
-        <nav className="p-4 flex-1 space-y-1">
-          <NavItem icon={<Users />} label="Pipeline" active={activeTab === 'pipeline'} onClick={() => setActiveTab('pipeline')} />
-          <NavItem icon={<BarChart3 />} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
-          <NavItem icon={<FileText />} label="Job Posts" />
+        <nav className="p-4 flex-1 space-y-2">
+          <NavItem icon={<Inbox className="w-4 h-4" />} label="Pipeline" active={activeTab === 'pipeline'} onClick={() => setActiveTab('pipeline')} />
+          <NavItem icon={<BarChart3 className="w-4 h-4" />} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
+          <NavItem icon={<FileText className="w-4 h-4" />} label="My Jobs" />
+          <NavItem icon={<Settings className="w-4 h-4" />} label="Settings" onClick={() => navigate('/settings')} />
         </nav>
-        
+
         <div className="p-4 border-t border-white/10">
-          <NavItem icon={<Settings />} label="Settings" />
-          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white mt-1">
-            <LogOut className="w-5 h-5" /> Logout
-          </button>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+            <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-400">
+              {user?.name?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-xs font-bold text-white truncate">{user?.name}</p>
+              <p className="text-[10px] text-slate-500 truncate">{user?.company_name || 'Personal Account'}</p>
+            </div>
+            <button onClick={logout} className="text-slate-500 hover:text-rose-400 transition-colors">
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
-        <header className="h-16 flex items-center justify-between px-8 border-b border-white/10 bg-[#0F172A]/50 backdrop-blur-xl">
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 relative h-screen">
+        <header className="h-16 flex items-center justify-between px-8 border-b border-white/10 bg-[#020617]/50 backdrop-blur-xl z-20">
           <div className="flex items-center gap-4 flex-1">
-            <div className="relative w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <div className="relative max-w-sm w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <input 
                 type="text" 
-                placeholder="Search candidates or jobs..." 
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                placeholder="Search candidates..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all"
               />
             </div>
             
-            <select 
-              value={activeJobId} 
-              onChange={e => setActiveJobId(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50 cursor-pointer transition-colors hover:bg-white/10"
-            >
-              <option value="" className="bg-[#0F172A]">All Jobs</option>
-              {jobs?.map(job => (
-                <option key={job._id} value={job._id} className="bg-[#0F172A]">{job.title}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
-              <Bell className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">{user?.name}</span>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 p-0.5">
-                <div className="w-full h-full rounded-full border-2 border-[#0F172A] bg-indigo-900 flex items-center justify-center shadow-inner">
-                  <span className="text-xs font-bold">{user?.name?.charAt(0).toUpperCase()}</span>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-500" />
+              <select 
+                value={activeJobId} 
+                onChange={e => setActiveJobId(e.target.value)}
+                className="bg-transparent text-sm text-slate-300 focus:outline-none cursor-pointer hover:text-white"
+              >
+                <option value="" className="bg-[#0F172A]">All Job Roles</option>
+                {jobs?.map(job => (
+                  <option key={job._id} value={job._id} className="bg-[#0F172A]">{job.title}</option>
+                ))}
+              </select>
             </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button onClick={() => setJobModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-semibold rounded-lg transition-all">
+              <Plus className="w-3.5 h-3.5" /> New Job
+            </button>
+            <button onClick={() => setResumeModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition-all shadow-lg shadow-indigo-600/20">
+              <UserPlus className="w-3.5 h-3.5" /> Add Candidate
+            </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8 custom-scrollbar relative">
-          <div className="max-w-7xl mx-auto space-y-8">
-            
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-semibold text-white tracking-tight">
-                {activeTab === 'pipeline' ? 'Hiring Pipeline' : 'Executive Analytics'}
-              </h1>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setJobModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <Plus className="h-4 w-4" /> Create Job
-                </button>
-                <button 
-                  onClick={() => setResumeModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_20px_rgba(79,70,229,0.5)]"
-                >
-                  <UserPlus className="h-4 w-4" /> Upload Candidate
-                </button>
-              </div>
-            </div>
-
+        <main className="flex-1 overflow-auto custom-scrollbar relative">
+          <div className="p-8 max-w-[1600px] mx-auto">
             <AnimatePresence mode="wait">
               {activeTab === 'pipeline' ? (
-                <motion.div 
-                  key="pipeline"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="space-y-8"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <StatCard title="Total Candidates" value={candidates?.length || 0} icon={<Users className="h-5 w-5 text-indigo-400" />} />
-                    <StatCard title="Shortlisted" value={pipeline.screening.length + pipeline.interview.length} icon={<CheckCircle className="h-5 w-5 text-purple-400" />} />
-                    <StatCard title="Active Jobs" value={jobs?.length || 0} icon={<Clock className="h-5 w-5 text-pink-400" />} />
+                <motion.div key="pipeline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+                  {/* Pipeline Quick Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <StatCard title="Total Candidates" value={candidates?.length || 0} icon={<Users />} color="indigo" />
+                    <StatCard title="Interviewed" value={pipeline.interviewed.length} icon={<BrainCircuit />} color="purple" />
+                    <StatCard title="Average Match" value={analytics?.avg_match_score ? `${analytics.avg_match_score}%` : 'N/A'} icon={<TrendingUp />} color="emerald" />
+                    <StatCard title="Active Jobs" value={jobs?.length || 0} icon={<Briefcase />} color="amber" />
                   </div>
 
-                  <div className="rounded-2xl bg-[#0F172A]/70 border border-white/10 p-5">
-                    <h3 className="text-sm font-semibold text-slate-200 mb-3">Company Apply Pages</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {jobs?.map((job) => (
-                        <div key={job._id} className="rounded-xl border border-white/10 bg-white/5 p-3 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-white font-medium">{job.title}</p>
-                            <p className="text-xs text-slate-400">Public apply page for this role</p>
-                          </div>
-                          <button onClick={() => copyApplyLink(job._id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-200">
-                            <Copy className="w-3.5 h-3.5" /> Copy Link
-                          </button>
+                  {/* Public Links Banner */}
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-600/10 to-purple-600/10 border border-white/10 backdrop-blur-md">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4 text-indigo-400" /> Public Application Links
+                      </h3>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Share these to receive resumes</p>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                      {jobs?.length > 0 ? jobs.map(job => (
+                        <div key={job._id} className="flex-shrink-0 flex items-center gap-3 bg-black/40 border border-white/10 px-4 py-2.5 rounded-xl hover:border-indigo-500/30 transition-all cursor-pointer group" onClick={() => copyApplyLink(job._id)}>
+                          <span className="text-xs font-medium text-slate-300">{job.title}</span>
+                          <Copy className="w-3 h-3 text-slate-500 group-hover:text-indigo-400 transition-colors" />
                         </div>
-                      ))}
+                      )) : <p className="text-xs text-slate-500 italic">No active jobs to show links for.</p>}
                     </div>
                   </div>
 
+                  {/* Kanban Board */}
                   {candidatesLoading ? (
-                    <div className="flex gap-6 overflow-x-auto pb-4 pt-4">
-                      {[1, 2, 3, 4].map(i => <KanbanSkeleton key={i} />)}
+                    <div className="flex gap-6 overflow-x-auto pb-4">
+                      {[1, 2, 3, 4, 5].map(i => <KanbanSkeleton key={i} />)}
                     </div>
                   ) : (
-                    <div className="flex gap-6 overflow-x-auto pb-4 pt-4 custom-scrollbar min-h-[600px]">
-                      <KanbanColumn title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanColumn title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanColumn title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanColumn title="Interviewed ✓" status="interviewed" items={pipeline.interviewed} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanColumn title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                    <div className="flex gap-6 overflow-x-auto pb-8 min-h-[600px] custom-scrollbar">
+                      <KanbanCol title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanCol title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanCol title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanCol title="Interviewed" status="interviewed" items={pipeline.interviewed} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanCol title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                     </div>
                   )}
                 </motion.div>
               ) : (
-                <motion.div 
-                  key="analytics"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="grid grid-cols-1 lg:grid-cols-2 gap-8"
-                >
-                  <div className="p-6 rounded-2xl bg-[#0F172A]/80 border border-white/10 backdrop-blur-xl">
-                    <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-                      <Target className="w-5 h-5 text-indigo-400" /> Hiring Funnel
-                    </h3>
-                    <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
-                          <XAxis type="number" hide />
-                          <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
-                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
-                          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                            {funnelData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={['#6366f1', '#a855f7', '#ec4899', '#10b981'][index]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                <motion.div key="analytics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Funnel Chart */}
+                    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl">
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-indigo-400" /> Pipeline conversion
+                      </h3>
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={[
+                            { name: 'Applied', value: pipeline.new.length },
+                            { name: 'Screening', value: pipeline.screening.length },
+                            { name: 'Interview', value: pipeline.interview.length },
+                            { name: 'Interviewed', value: pipeline.interviewed.length },
+                            { name: 'Hired', value: pipeline.hired.length }
+                          ]}>
+                            <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }} />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
+                              {[0,1,2,3,4].map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={['#6366f1', '#818cf8', '#a78bfa', '#c084fc', '#10b981'][index]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="p-6 rounded-2xl bg-[#0F172A]/80 border border-white/10 backdrop-blur-xl">
-                    <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-purple-400" /> Match Score Distribution
-                    </h3>
-                    <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={distributionData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
-                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
-                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                            {distributionData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                    {/* Match Score Area Chart */}
+                    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl">
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" /> Top Talent Ranking
+                      </h3>
+                      <div className="h-[300px]">
+                         <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={analytics?.top_candidates || []}>
+                              <defs>
+                                <linearGradient id="colorMatch" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="name" hide />
+                              <YAxis domain={[0, 100]} hide />
+                              <Tooltip content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="bg-[#0F172A] border border-white/10 p-3 rounded-xl shadow-2xl">
+                                      <p className="text-xs font-bold text-white">{payload[0].payload.name}</p>
+                                      <p className="text-xs text-indigo-400 font-black mt-1">Match: {payload[0].value}%</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }} />
+                              <Area type="monotone" dataKey="match_score" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorMatch)" />
+                            </AreaChart>
+                         </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
+      {/* Modals & Drawer */}
       <CreateJobModal isOpen={isJobModalOpen} onClose={() => setJobModalOpen(false)} />
       <UploadResumeModal isOpen={isResumeModalOpen} onClose={() => setResumeModalOpen(false)} />
+      
+      <AnimatePresence>
+        {selectedCandidate && (
+          <CandidateDrawer 
+            candidate={selectedCandidate} 
+            onClose={() => setSelectedCandidate(null)} 
+            onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })}
+            inviteLoading={sendInviteMutation.isPending}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+// --- SUB-COMPONENTS ---
 
 function NavItem({ icon, label, active, onClick }) {
   return (
-    <div onClick={onClick} className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium cursor-pointer ${
-      active 
-        ? 'bg-indigo-500/10 text-indigo-300 shadow-[inset_2px_0_0_0_#818cf8]' 
-        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+    <button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
+      active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
     }`}>
       {icon}
-      {label}
-    </div>
+      <span>{label}</span>
+      {active && <motion.div layoutId="nav-active" className="ml-auto w-1.5 h-1.5 rounded-full bg-white" />}
+    </button>
   );
 }
 
-function StatCard({ title, value, icon }) {
+function StatCard({ title, value, icon, color }) {
+  const colors = {
+    indigo: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+    purple: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  };
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 rounded-xl bg-[#0F172A]/50 border border-white/10 backdrop-blur-md relative overflow-hidden group hover:border-white/20 transition-all shadow-lg">
-      <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-40 transition-opacity">
+    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md relative overflow-hidden group">
+      <div className={`absolute top-4 right-4 p-2 rounded-lg ${colors[color]} border`}>
         {icon}
       </div>
-      <h3 className="text-sm font-medium text-slate-400 mb-2">{title}</h3>
-      <div className="text-3xl font-bold text-white tracking-tight">
-        {typeof value === 'number' ? <AnimatedCounter value={value} /> : value}
-      </div>
-    </motion.div>
-  );
-}
-
-function AnimatedCounter({ value }) {
-  return <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={value}>{value}</motion.span>;
-}
-
-function KanbanSkeleton() {
-  return (
-    <div className="flex flex-col w-[340px] flex-shrink-0">
-      <div className="h-6 w-32 bg-white/5 rounded animate-pulse mb-4" />
-      <div className="flex-1 min-h-[500px] rounded-xl bg-white/5 border border-white/5 p-3 flex flex-col gap-3">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-32 bg-white/5 rounded-lg animate-pulse" />
-        ))}
-      </div>
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{title}</p>
+      <p className="text-3xl font-black text-white mt-2 tracking-tight">{value}</p>
     </div>
   );
 }
 
-function KanbanColumn({ title, status, items, onDragStart, onDrop, onDragOver, onInvite, inviteLoading }) {
+function KanbanCol({ title, status, items, onDragStart, onDrop, onDragOver, onSelect, onInvite, inviteLoading }) {
   return (
-    <div 
-      className="flex flex-col w-[340px] flex-shrink-0"
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, status)}
-    >
+    <div className="flex flex-col w-[320px] flex-shrink-0" onDragOver={onDragOver} onDrop={(e) => onDrop(e, status)}>
       <div className="flex items-center justify-between mb-4 px-1">
-        <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-          {title} 
-          <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold">{items.length}</span>
+        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+          {title} <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400">{items.length}</span>
         </h3>
       </div>
-      
-      <div className={`flex-1 min-h-[500px] rounded-xl bg-[#0F172A]/30 border border-white/5 border-dashed p-3 flex flex-col gap-3 transition-colors hover:bg-white/5 ${items.length === 0 ? 'items-center justify-center' : ''}`}>
-        {items.length === 0 ? (
-          <div className="text-center p-6 text-slate-500 flex flex-col items-center">
-            <Inbox className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-sm font-medium">Drop candidates here</p>
+      <div className="flex-1 space-y-3 min-h-[500px]">
+        {items.map(c => (
+          <CandidateCard key={c._id} candidate={c} onDragStart={onDragStart} onClick={() => onSelect(c)} onInvite={onInvite} inviteLoading={inviteLoading} />
+        ))}
+        {items.length === 0 && (
+          <div className="h-24 rounded-2xl border border-white/5 border-dashed flex items-center justify-center">
+            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Empty Stage</p>
           </div>
-        ) : (
-          items.map(candidate => (
-            <CandidateCard key={candidate._id} candidate={candidate} onDragStart={onDragStart} onInvite={onInvite} inviteLoading={inviteLoading} />
-          ))
         )}
       </div>
     </div>
   );
 }
 
-function CandidateCard({ candidate, onDragStart, onInvite, inviteLoading }) {
-  const { name, email, match_score, ai_insights } = candidate;
-  const initials = name?.substring(0, 2).toUpperCase() || '??';
-  const hasInsights = ai_insights != null;
-
+function CandidateCard({ candidate, onDragStart, onClick, onInvite, inviteLoading }) {
+  const { name, match_score, ai_insights } = candidate;
+  const color = match_score >= 80 ? 'emerald' : match_score >= 60 ? 'amber' : 'rose';
+  
   return (
     <motion.div 
       layout
       draggable
       onDragStart={(e) => onDragStart(e, candidate._id)}
-      whileHover={{ y: -2 }}
-      className="p-5 rounded-xl bg-[#1E293B]/80 border border-white/10 hover:border-indigo-500/50 backdrop-blur-md cursor-grab active:cursor-grabbing transition-colors group relative overflow-hidden shadow-xl"
+      onClick={onClick}
+      whileHover={{ y: -4, scale: 1.02 }}
+      className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-indigo-500/50 cursor-pointer shadow-xl relative overflow-hidden group"
     >
-      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-      
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white bg-gradient-to-br from-indigo-500 to-purple-600 shadow-inner">
-            {initials}
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-xs font-bold text-white border border-white/10">
+            {name.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-white truncate max-w-[150px]">{name}</h4>
-            <p className="text-xs text-slate-400 truncate max-w-[150px]">{email}</p>
+          <div className="min-w-0">
+            <h4 className="text-sm font-bold text-white truncate max-w-[140px]">{name}</h4>
+            <p className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">Applied: {new Date(candidate.created_at).toLocaleDateString()}</p>
           </div>
         </div>
-        
         {match_score !== null && (
-          <div className={`px-2 py-1 rounded-lg border flex flex-col items-center justify-center shadow-inner ${match_score >= 80 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : match_score >= 60 ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-            <span className="text-[9px] uppercase font-bold tracking-wider opacity-80 mb-0.5">Match</span>
-            <span className="text-sm font-bold">{match_score}%</span>
+          <div className={`px-2 py-1 rounded-lg border text-[10px] font-black ${
+            color === 'emerald' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
+            color === 'amber' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 
+            'bg-rose-500/10 border-rose-500/20 text-rose-400'
+          }`}>
+            {match_score}%
           </div>
         )}
       </div>
 
-      {hasInsights ? (
-        <div className="mt-4 pt-3 border-t border-white/5 space-y-3">
-          {ai_insights.recommendation_label && (
-             <div className="inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase bg-white/5 border border-white/10 text-slate-300">
-               {ai_insights.recommendation_label}
-             </div>
-          )}
-          
-          <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-            {ai_insights.summary}
-          </p>
-          
-          {ai_insights.missing_points?.length > 0 && (
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-rose-400 mb-1.5 block">Skill Gaps</span>
-              <div className="flex flex-wrap gap-1.5">
-                {ai_insights.missing_points.slice(0, 2).map((skill, i) => (
-                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 truncate max-w-[120px]">
-                    {skill}
-                  </span>
-                ))}
-                {ai_insights.missing_points.length > 2 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400">
-                    +{ai_insights.missing_points.length - 2}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-          <button
-            onClick={() => onInvite(candidate)}
+      {ai_insights ? (
+        <div className="space-y-3">
+          <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed italic">"{ai_insights.summary}"</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {ai_insights.missing_points?.slice(0, 2).map((s, i) => (
+              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-bold truncate max-w-[80px]">{s}</span>
+            ))}
+          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onInvite(candidate); }}
             disabled={inviteLoading}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-200 hover:bg-indigo-600/30 disabled:opacity-60"
+            className="w-full py-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-[10px] font-black text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all uppercase tracking-widest flex items-center justify-center gap-2"
           >
-            <Mail className="w-3.5 h-3.5" />
-            {inviteLoading ? 'Sending...' : 'Send Interview Link'}
+            <Mail className="w-3 h-3" /> {inviteLoading ? 'Sending...' : 'Send Interview'}
           </button>
         </div>
       ) : (
-        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-center gap-2 py-3">
-          <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-[11px] font-semibold tracking-wide uppercase text-indigo-400">Processing Resume</span>
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 className="w-3 h-3 text-indigo-500 animate-spin" />
+          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Analyzing...</span>
         </div>
       )}
     </motion.div>
   );
 }
+
+function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
+      <motion.div 
+        initial={{ x: '100%' }} 
+        animate={{ x: 0 }} 
+        exit={{ x: '100%' }} 
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="fixed top-0 right-0 h-full w-full max-w-xl bg-[#0F172A] border-l border-white/10 z-[70] shadow-2xl overflow-y-auto custom-scrollbar"
+      >
+        <div className="p-8">
+          <header className="flex items-center justify-between mb-8">
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-slate-400 transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+            <div className="flex gap-3">
+              <button onClick={() => onInvite(candidate)} disabled={inviteLoading} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20">
+                <Mail className="w-4 h-4" /> {inviteLoading ? 'Sending...' : 'Send AI Interview'}
+              </button>
+            </div>
+          </header>
+
+          <div className="flex items-center gap-6 mb-10">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
+              {candidate.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-white">{candidate.name}</h2>
+              <p className="text-slate-400 flex items-center gap-2 mt-1">
+                <Mail className="w-4 h-4" /> {candidate.email}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-10">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Match Score</p>
+              <p className={`text-2xl font-black ${candidate.match_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {candidate.match_score}%
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Recommendation</p>
+              <p className="text-sm font-bold text-white">{candidate.ai_insights?.recommendation_label || 'Processing'}</p>
+            </div>
+          </div>
+
+          <section className="space-y-8">
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400 mb-4">AI Analysis Summary</h3>
+              <p className="text-slate-300 leading-relaxed text-sm bg-indigo-500/5 border border-indigo-500/10 p-5 rounded-2xl italic">
+                "{candidate.ai_insights?.summary}"
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-emerald-400 mb-4">Key Strengths</h3>
+                <ul className="space-y-3">
+                  {candidate.ai_insights?.good_points?.map((p, i) => (
+                    <li key={i} className="flex gap-2 text-xs text-slate-300 leading-tight">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" /> {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-rose-400 mb-4">Missing Skills</h3>
+                <ul className="space-y-3">
+                  {candidate.ai_insights?.missing_points?.map((p, i) => (
+                    <li key={i} className="flex gap-2 text-xs text-slate-300 leading-tight">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" /> {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-purple-400 mb-4">Recommended Questions</h3>
+              <div className="space-y-3">
+                {candidate.ai_insights?.interview_questions?.map((q, i) => (
+                  <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-300">
+                    {q}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+function KanbanSkeleton() {
+  return (
+    <div className="w-[320px] flex-shrink-0 animate-pulse">
+      <div className="h-4 w-24 bg-white/5 rounded mb-4" />
+      <div className="space-y-3">
+        {[1,2,3].map(i => <div key={i} className="h-32 rounded-2xl bg-white/5" />)}
+      </div>
+    </div>
+  );
+}
+
+function CheckCircle2(props) { return <CheckCircle {...props} /> }
+function AlertCircle(props) { return <X className="text-rose-500" {...props} /> }

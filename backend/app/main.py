@@ -19,7 +19,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .db import get_db, init_db
-from .schemas import JobCreate, JobOut, CandidateOut, AIInsights, UserCreate, UserOut, Token
+from .schemas import (
+    JobCreate, JobOut, CandidateOut, AIInsights, 
+    UserCreate, UserOut, Token, UserLogin, VerifyOTP,
+    ProfileUpdate, PasswordChange
+)
 from .ai_service import ResumeAI
 from .auth import get_password_hash, verify_password, create_access_token, get_current_user
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES
@@ -139,53 +143,145 @@ async def health_db():
         )
 
 # --- AUTH ---
-@app.post("/api/auth/register", response_model=UserOut)
-async def register(user: UserCreate):
+
+async def _create_otp(email: str, type: str):
     db = await get_db()
-    try:
-        if await db.users.find_one({"email": user.email}):
-            raise HTTPException(status_code=400, detail="Email already registered")
+    otp = _generate_numeric_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    await db.otps.update_one(
+        {"email": email, "type": type},
+        {"$set": {"otp_hash": _hash_value(otp), "expires_at": expires_at}},
+        upsert=True
+    )
+    return otp
 
-        user_dict = user.dict()
-        user_dict["password"] = get_password_hash(user_dict["password"])
-        user_dict["created_at"] = datetime.utcnow()
-
-        result = await db.users.insert_one(user_dict)
-        created_user = await db.users.find_one({"_id": result.inserted_id})
-        return fix_id(created_user)
-    except HTTPException:
-        raise
-    except PyMongoError as exc:
-        print(f"Database error during registration: {exc}")
-        raise HTTPException(status_code=503, detail="Database connection failed. Check backend MONGO_URI.")
-
-@app.post("/api/auth/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@app.post("/api/auth/register")
+async def register(user: UserCreate, background_tasks: BackgroundTasks):
     db = await get_db()
-    try:
-        user = await db.users.find_one({"email": form_data.username})
-        if not user or not verify_password(form_data.password, user["password"]):
-            raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if await db.users.find_one({"email": user.email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-        access_token = create_access_token(
-            data={"sub": str(user["_id"]), "type": "access"},
-            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-        )
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": str(user["_id"]),
-                "email": user["email"],
-                "name": user["name"],
-                "role": user["role"]
-            }
+    user_dict = user.dict()
+    user_dict["password"] = get_password_hash(user_dict["password"])
+    user_dict["created_at"] = datetime.utcnow()
+    user_dict["is_verified"] = False
+    user_dict["role"] = "recruiter"
+    user_dict["company_logo"] = None
+
+    await db.users.insert_one(user_dict)
+    
+    otp = await _create_otp(user.email, "signup")
+    background_tasks.add_task(
+        _send_email_sync,
+        user.email,
+        "Verify your HireFlow Account",
+        f"Welcome to HireFlow AI!\n\nYour verification code is: {otp}\nExpires in 10 minutes."
+    )
+    
+    return {"message": "Signup successful. Please verify your email."}
+
+@app.post("/api/auth/verify-signup")
+async def verify_signup(payload: VerifyOTP):
+    db = await get_db()
+    otp_doc = await db.otps.find_one({"email": payload.email, "type": "signup"})
+    
+    if not otp_doc or datetime.utcnow() > otp_doc["expires_at"]:
+        raise HTTPException(status_code=400, detail="OTP expired or invalid")
+    
+    if otp_doc["otp_hash"] != _hash_value(payload.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    await db.users.update_one({"email": payload.email}, {"$set": {"is_verified": True}})
+    await db.otps.delete_one({"_id": otp_doc["_id"]})
+    
+    return {"message": "Account verified successfully. You can now login."}
+
+@app.post("/api/auth/login")
+async def login(payload: UserLogin, background_tasks: BackgroundTasks):
+    db = await get_db()
+    user = await db.users.find_one({"email": payload.email})
+    
+    if not user or not verify_password(payload.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not user.get("is_verified", False):
+        raise HTTPException(status_code=403, detail="Email not verified")
+
+    otp = await _create_otp(payload.email, "login")
+    background_tasks.add_task(
+        _send_email_sync,
+        payload.email,
+        "Login Verification Code",
+        f"Your HireFlow login code is: {otp}\nExpires in 10 minutes."
+    )
+    
+    return {"message": "OTP sent to your email"}
+
+@app.post("/api/auth/verify-login", response_model=Token)
+async def verify_login(payload: VerifyOTP):
+    db = await get_db()
+    otp_doc = await db.otps.find_one({"email": payload.email, "type": "login"})
+    
+    if not otp_doc or datetime.utcnow() > otp_doc["expires_at"]:
+        raise HTTPException(status_code=400, detail="OTP expired or invalid")
+    
+    if otp_doc["otp_hash"] != _hash_value(payload.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    user = await db.users.find_one({"email": payload.email})
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}})
+    await db.otps.delete_one({"_id": otp_doc["_id"]})
+
+    access_token = create_access_token(
+        data={"sub": str(user["_id"]), "type": "access"},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(user["_id"]),
+            "email": user["email"],
+            "name": user["name"],
+            "company_name": user.get("company_name"),
+            "company_logo": user.get("company_logo"),
+            "role": user.get("role", "recruiter")
         }
-    except HTTPException:
-        raise
-    except PyMongoError as exc:
-        print(f"Database error during login: {exc}")
-        raise HTTPException(status_code=503, detail="Database connection failed. Check backend MONGO_URI.")
+    }
+
+# --- PROFILE & SETTINGS ---
+
+@app.get("/api/profile", response_model=UserOut)
+async def get_profile(current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    user = await db.users.find_one({"_id": parse_object_id(current_user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return fix_id(user)
+
+@app.patch("/api/profile", response_model=UserOut)
+async def update_profile(profile: ProfileUpdate, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    update_data = {k: v for k, v in profile.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+    
+    await db.users.update_one({"_id": parse_object_id(current_user_id)}, {"$set": update_data})
+    updated_user = await db.users.find_one({"_id": parse_object_id(current_user_id)})
+    return fix_id(updated_user)
+
+@app.post("/api/auth/change-password")
+async def change_password(payload: PasswordChange, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    user = await db.users.find_one({"_id": parse_object_id(current_user_id)})
+    
+    if not verify_password(payload.old_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    
+    new_hashed = get_password_hash(payload.new_password)
+    await db.users.update_one({"_id": parse_object_id(current_user_id)}, {"$set": {"password": new_hashed}})
+    return {"message": "Password updated successfully"}
 
 # --- JOBS ---
 
@@ -235,6 +331,15 @@ async def request_apply_code(job_id: str, payload: dict, background_tasks: Backg
     name = (payload.get("name") or "").strip()
     if not email or not name:
         raise HTTPException(status_code=400, detail="Name and email are required")
+
+    # Check for duplicate application
+    if await db.candidates.find_one({"applied_job_id": job_id, "email": email}):
+        raise HTTPException(status_code=400, detail="You have already applied for this position")
+
+    # Check for resend cooldown (60 seconds)
+    last_request = await db.apply_email_codes.find_one({"job_id": job_id, "email": email})
+    if last_request and (datetime.utcnow() - last_request.get("updated_at", datetime.min)).total_seconds() < 60:
+        raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code")
 
     code = _generate_numeric_code()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
