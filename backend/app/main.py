@@ -703,6 +703,23 @@ async def delete_candidate(candidate_id: str, current_user_id: str = Depends(get
         raise HTTPException(status_code=404, detail="Candidate not found")
     return {"message": "Candidate deleted"}
 
+@app.get("/api/candidates/{candidate_id}/resume-text")
+async def get_candidate_resume_text(candidate_id: str, current_user_id: str = Depends(get_current_user)):
+    """Dedicated endpoint to fetch full resume_text for a candidate — bypasses response_model serialization."""
+    db = await get_db()
+    # Explicitly project resume_text field
+    candidate = await db.candidates.find_one(
+        {"_id": parse_object_id(candidate_id, "candidate_id"), "recruiter_id": current_user_id},
+        {"resume_text": 1, "name": 1, "_id": 1}
+    )
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return {
+        "candidate_id": candidate_id,
+        "name": candidate.get("name", ""),
+        "resume_text": candidate.get("resume_text") or None
+    }
+
 # --- ANALYTICS ---
 
 @app.get("/api/analytics/summary")

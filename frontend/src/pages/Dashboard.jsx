@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -842,7 +842,28 @@ function KanbanSkeleton() {
 }
 
 function ResumeModal({ candidate, onClose }) {
-  const text = candidate?.resume_text;
+  const [resumeText, setResumeText] = useState(candidate?.resume_text || null);
+  const [loading, setLoading] = useState(!candidate?.resume_text);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!candidate?._id) return;
+    // Always fetch fresh from dedicated endpoint
+    setLoading(true);
+    setError(null);
+    import('../api').then(({ default: api }) => {
+      api.get(`/candidates/${candidate._id}/resume-text`)
+        .then(res => {
+          setResumeText(res.data.resume_text || null);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError('Failed to load resume. Please try again.');
+          setLoading(false);
+        });
+    });
+  }, [candidate?._id]);
+
   return (
     <>
       <motion.div
@@ -874,16 +895,26 @@ function ResumeModal({ candidate, onClose }) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          {text ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+              <p className="text-slate-500 text-sm">Loading resume...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+              <AlertCircle className="w-12 h-12 text-rose-500/50" />
+              <p className="text-rose-400 font-semibold">{error}</p>
+            </div>
+          ) : resumeText ? (
             <pre className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
-              {text}
+              {resumeText}
             </pre>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <FileText className="w-12 h-12 text-slate-700" />
               <div>
                 <p className="text-slate-400 font-semibold">No Resume Text Available</p>
-                <p className="text-slate-600 text-sm mt-1">The parsed resume content was not stored for this candidate.</p>
+                <p className="text-slate-600 text-sm mt-1">This candidate was added before resume parsing was enabled, or the PDF was unreadable.</p>
               </div>
             </div>
           )}
