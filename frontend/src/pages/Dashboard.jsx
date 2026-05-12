@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [resumeModalCandidate, setResumeModalCandidate] = useState(null);
 
   // Queries
   const { data: jobs, isLoading: jobsLoading } = useQuery({
@@ -329,6 +330,13 @@ export default function Dashboard() {
             }}
             onUpdate={(id, data) => updateCandidateDetailsMutation.mutate({ id, ...data })}
             saveLoading={updateCandidateDetailsMutation.isPending}
+            onViewResume={(c) => setResumeModalCandidate(c)}
+          />
+        )}
+        {resumeModalCandidate && (
+          <ResumeModal
+            candidate={resumeModalCandidate}
+            onClose={() => setResumeModalCandidate(null)}
           />
         )}
       </AnimatePresence>
@@ -576,11 +584,7 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading, onDelete
                 <Mail className="w-4 h-4" /> {inviteLoading ? 'Sending...' : 'Send AI Interview Invite'}
               </button>
               <button 
-                onClick={() => {
-                  const win = window.open('', '_blank');
-                  win.document.write(`<pre style="font-family: sans-serif; padding: 40px; line-height: 1.6; color: #333;">${candidate.resume_text || 'No resume text available.'}</pre>`);
-                  win.document.title = `Resume - ${candidate.name}`;
-                }}
+                onClick={() => onViewResume(candidate)}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-white/10 transition-all"
               >
                 <FileText className="w-4 h-4" /> View Parsed Resume
@@ -601,5 +605,57 @@ function KanbanSkeleton() {
         {[1,2,3].map(i => <div key={i} className="h-32 rounded-2xl bg-white/5" />)}
       </div>
     </div>
+  );
+}
+
+function ResumeModal({ candidate, onClose }) {
+  const text = candidate?.resume_text;
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[80]"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-4 md:inset-10 z-[90] bg-[#0F172A] border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-black text-white">
+              {candidate?.name?.charAt(0).toUpperCase() || 'C'}
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">{candidate?.name}</h2>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Parsed Resume Text</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          {text ? (
+            <pre className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+              {text}
+            </pre>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+              <FileText className="w-12 h-12 text-slate-700" />
+              <div>
+                <p className="text-slate-400 font-semibold">No Resume Text Available</p>
+                <p className="text-slate-600 text-sm mt-1">The parsed resume content was not stored for this candidate.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
   );
 }

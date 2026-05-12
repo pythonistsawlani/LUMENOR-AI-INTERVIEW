@@ -128,6 +128,7 @@ class CandidateOut(CandidateBase):
     match_score: Optional[int] = None
     ai_insights: Optional[AIInsights] = None
     resume_url: Optional[str] = None
+    resume_text: Optional[str] = None
     is_archived: bool = False
     notes: Optional[str] = None
     source: str = "public" # public, manual
