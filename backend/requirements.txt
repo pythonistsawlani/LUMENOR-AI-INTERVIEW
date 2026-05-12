@@ -1,6 +1,7 @@
 fastapi==0.115.12
 uvicorn[standard]==0.34.2
 pydantic>=2.0.0
+email-validator>=2.0.0
 python-dotenv==1.1.0
 huggingface_hub==0.31.2
 motor==3.6.0
