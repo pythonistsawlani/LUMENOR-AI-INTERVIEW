@@ -1,0 +1,90 @@
+:root {
+  --bg: #f4f7fb;
+  --panel: #ffffff;
+  --text: #0f172a;
+  --muted: #475569;
+  --primary: #0ea5e9;
+  --primary-dark: #0284c7;
+  --line: #e2e8f0;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Poppins", "Segoe UI", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top right, #dbeafe, #f8fafc 45%);
+}
+
+.app-shell { min-height: 100vh; }
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.7);
+}
+.topbar h1 { margin: 0; font-size: 1.1rem; }
+.topbar nav a {
+  margin-left: 16px;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+.topbar nav a.active { color: var(--primary-dark); }
+.page { max-width: 920px; margin: 24px auto; padding: 0 16px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(2, 132, 199, 0.08);
+}
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid input, .grid select, textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+textarea { resize: vertical; }
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.ghost { background: #e2e8f0; color: #0f172a; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.progress-track > div {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #0284c7);
+}
+.row { display: flex; gap: 8px; align-items: center; }
+.list { display: grid; gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.card h3 { margin: 0 0 10px; font-size: 1rem; }
+.qa { border-top: 1px solid var(--line); padding: 10px 0; }
+.chart-wrap { width: 100%; height: 260px; }
+.error { color: #b91c1c; }
+
+@media (max-width: 700px) {
+  .grid { grid-template-columns: 1fr; }
+}

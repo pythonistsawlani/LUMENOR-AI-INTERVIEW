@@ -1,0 +1,35 @@
+# ─── Secrets & Environment ───
+.env
+.env.local
+.env.production
+backend/.env
+
+# ─── Python ───
+backend/.venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ─── Node ───
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ─── IDEs ───
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+
+# ─── Misc ───
+backend/interviews.db
+*.log

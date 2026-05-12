@@ -1,0 +1,10 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic<2
+python-dotenv==1.1.0
+huggingface_hub==0.31.2
+motor==3.6.0
+PyMuPDF==1.25.1
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
