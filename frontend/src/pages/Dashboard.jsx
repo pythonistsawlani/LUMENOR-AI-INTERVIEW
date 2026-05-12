@@ -35,6 +35,13 @@ export default function Dashboard() {
     queryFn: () => api.get('/my-jobs').then(res => res.data)
   });
 
+  // Auto-clear stale activeJobId if it's not in the current jobs list
+  useEffect(() => {
+    if (jobs && activeJobId && !jobs.find(j => j._id === activeJobId)) {
+      setActiveJobId('');
+    }
+  }, [jobs, activeJobId]);
+
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
     queryKey: ['candidates', activeJobId],
     queryFn: () => {

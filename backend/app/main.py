@@ -601,14 +601,20 @@ async def get_candidates(job_id: str = None, current_user_id: str = Depends(get_
     db = await get_db()
     
     query = {"recruiter_id": current_user_id}
-    if job_id:
-        owned_job = await db.jobs.find_one({"_id": parse_object_id(job_id, "job_id"), "recruiter_id": current_user_id})
+    if job_id and job_id.strip():
+        # Verify the job belongs to the recruiter — if not found, return empty list (not 404)
+        try:
+            owned_job = await db.jobs.find_one(
+                {"_id": parse_object_id(job_id, "job_id"), "recruiter_id": current_user_id}
+            )
+        except Exception:
+            return []  # Invalid ObjectId format — return empty
+        
         if not owned_job:
-            raise HTTPException(status_code=404, detail="Job not found or access denied")
+            return []  # Job doesn't exist or doesn't belong to this recruiter
         query["applied_job_id"] = job_id
         
-    candidates = await db.candidates.find(query).to_list(100)
-    # NOTE: resume_text IS included here for the Resume Modal feature
+    candidates = await db.candidates.find(query).to_list(200)
     return [fix_id(c) for c in candidates]
 
 @app.patch("/api/candidates/{candidate_id}/status")
