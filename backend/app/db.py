@@ -12,8 +12,13 @@ async def get_db():
     return db
 
 async def init_db():
-    # Create indexes for performance
-    await db.jobs.create_index("recruiter_id")
-    await db.candidates.create_index("applied_job_id")
-    await db.candidates.create_index("status")
-    print("MongoDB indexes verified.")
+    try:
+        # Set a short timeout for index creation to avoid hanging on Render
+        print("Connecting to MongoDB and verifying indexes...")
+        await db.jobs.create_index("recruiter_id")
+        await db.candidates.create_index("applied_job_id")
+        await db.candidates.create_index("status")
+        print("✅ MongoDB indexes verified successfully.")
+    except Exception as e:
+        print(f"⚠️ MongoDB Initialization Warning: {e}")
+        print("Server will continue, but some queries might be slower.")

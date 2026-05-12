@@ -19,11 +19,15 @@ from .auth import get_password_hash, verify_password, create_access_token, get_c
 app = FastAPI(title="HireFlow AI Backend", version="2.0.0")
 
 # ---- Production-ready CORS ----
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")]
+
+print(f"🚀 Starting server with origins: {ALLOWED_ORIGINS}")
 
 @app.on_event("startup")
 async def startup_db_client():
+    print("⏳ Running startup tasks...")
     await init_db()
+    print("✅ Startup complete.")
 
 app.add_middleware(
     CORSMiddleware,
