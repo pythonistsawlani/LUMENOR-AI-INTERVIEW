@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey_hireflowai_2026")
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET is required. Set it in backend/.env before starting the server.")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
@@ -42,6 +44,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
+            raise credentials_exception
+        token_type: str = payload.get("type", "access")
+        if token_type != "access":
             raise credentials_exception
     except JWTError:
         raise credentials_exception

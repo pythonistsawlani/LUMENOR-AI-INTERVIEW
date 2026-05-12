@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, UserPlus, CheckCircle, Clock, 
-  Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox
+  Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox, Mail, Copy
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +43,20 @@ export default function Dashboard() {
       addToast('Candidate status updated successfully');
     },
     onError: () => addToast('Failed to update status', 'error')
+  });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: ({ candidateId, jobId }) =>
+      api.post('/interviews/invite', {
+        candidate_id: candidateId,
+        job_id: jobId,
+        difficulty: 'medium',
+        total_questions: 6,
+        focus_areas: [],
+        custom_instructions: ''
+      }),
+    onSuccess: () => addToast('Interview link generated and emailed to candidate.', 'success'),
+    onError: (err) => addToast(err?.response?.data?.detail || 'Failed to send invite', 'error')
   });
 
   const pipeline = useMemo(() => {
@@ -93,6 +107,16 @@ export default function Dashboard() {
     const candidateId = e.dataTransfer.getData('candidateId');
     if (candidateId) {
       updateStatusMutation.mutate({ candidateId, status });
+    }
+  };
+
+  const copyApplyLink = async (jobId) => {
+    const link = `${window.location.origin}/apply/${jobId}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      addToast('Apply link copied');
+    } catch {
+      addToast('Could not copy link', 'error');
     }
   };
 
@@ -203,16 +227,33 @@ export default function Dashboard() {
                     <StatCard title="Active Jobs" value={jobs?.length || 0} icon={<Clock className="h-5 w-5 text-pink-400" />} />
                   </div>
 
+                  <div className="rounded-2xl bg-[#0F172A]/70 border border-white/10 p-5">
+                    <h3 className="text-sm font-semibold text-slate-200 mb-3">Company Apply Pages</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {jobs?.map((job) => (
+                        <div key={job._id} className="rounded-xl border border-white/10 bg-white/5 p-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-white font-medium">{job.title}</p>
+                            <p className="text-xs text-slate-400">Public apply page for this role</p>
+                          </div>
+                          <button onClick={() => copyApplyLink(job._id)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-200">
+                            <Copy className="w-3.5 h-3.5" /> Copy Link
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {candidatesLoading ? (
                     <div className="flex gap-6 overflow-x-auto pb-4 pt-4">
                       {[1, 2, 3, 4].map(i => <KanbanSkeleton key={i} />)}
                     </div>
                   ) : (
                     <div className="flex gap-6 overflow-x-auto pb-4 pt-4 custom-scrollbar min-h-[600px]">
-                      <KanbanColumn title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} />
-                      <KanbanColumn title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} />
-                      <KanbanColumn title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} />
-                      <KanbanColumn title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} />
+                      <KanbanColumn title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanColumn title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanColumn title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      <KanbanColumn title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onInvite={(candidate) => sendInviteMutation.mutate({ candidateId: candidate._id, jobId: candidate.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
                     </div>
                   )}
                 </motion.div>
@@ -320,7 +361,7 @@ function KanbanSkeleton() {
   );
 }
 
-function KanbanColumn({ title, status, items, onDragStart, onDrop, onDragOver }) {
+function KanbanColumn({ title, status, items, onDragStart, onDrop, onDragOver, onInvite, inviteLoading }) {
   return (
     <div 
       className="flex flex-col w-[340px] flex-shrink-0"
@@ -342,7 +383,7 @@ function KanbanColumn({ title, status, items, onDragStart, onDrop, onDragOver })
           </div>
         ) : (
           items.map(candidate => (
-            <CandidateCard key={candidate._id} candidate={candidate} onDragStart={onDragStart} />
+            <CandidateCard key={candidate._id} candidate={candidate} onDragStart={onDragStart} onInvite={onInvite} inviteLoading={inviteLoading} />
           ))
         )}
       </div>
@@ -350,7 +391,7 @@ function KanbanColumn({ title, status, items, onDragStart, onDrop, onDragOver })
   );
 }
 
-function CandidateCard({ candidate, onDragStart }) {
+function CandidateCard({ candidate, onDragStart, onInvite, inviteLoading }) {
   const { name, email, match_score, ai_insights } = candidate;
   const initials = name?.substring(0, 2).toUpperCase() || '??';
   const hasInsights = ai_insights != null;
@@ -413,6 +454,14 @@ function CandidateCard({ candidate, onDragStart }) {
               </div>
             </div>
           )}
+          <button
+            onClick={() => onInvite(candidate)}
+            disabled={inviteLoading}
+            className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-200 hover:bg-indigo-600/30 disabled:opacity-60"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            {inviteLoading ? 'Sending...' : 'Send Interview Link'}
+          </button>
         </div>
       ) : (
         <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-center gap-2 py-3">

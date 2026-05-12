@@ -217,17 +217,17 @@ DEMO_CANDIDATES = [
 
 
 async def seed():
-    print("🌱 Starting HireFlow AI demo seed...")
+    print("Starting HireFlow AI demo seed...")
 
     # Create demo recruiter
     existing = await db.users.find_one({"email": DEMO_RECRUITER["email"]})
     if existing:
         recruiter_id = str(existing["_id"])
-        print(f"  ✓ Demo recruiter already exists (id: {recruiter_id})")
+        print(f"  Demo recruiter already exists (id: {recruiter_id})")
     else:
         result = await db.users.insert_one(DEMO_RECRUITER)
         recruiter_id = str(result.inserted_id)
-        print(f"  ✓ Created demo recruiter (id: {recruiter_id})")
+        print(f"  Created demo recruiter (id: {recruiter_id})")
 
     # Create demo jobs
     existing_jobs = await db.jobs.count_documents({"recruiter_id": recruiter_id})
@@ -235,9 +235,9 @@ async def seed():
         for job in DEMO_JOBS:
             job["recruiter_id"] = recruiter_id
         await db.jobs.insert_many(DEMO_JOBS)
-        print(f"  ✓ Inserted {len(DEMO_JOBS)} demo jobs")
+        print(f"  Inserted {len(DEMO_JOBS)} demo jobs")
     else:
-        print(f"  ✓ Demo jobs already exist ({existing_jobs} found)")
+        print(f"  Demo jobs already exist ({existing_jobs} found)")
 
     # Link candidates to first job
     first_job = await db.jobs.find_one({"recruiter_id": recruiter_id})
@@ -248,11 +248,11 @@ async def seed():
                 c["applied_job_id"] = str(first_job["_id"])
                 c["resume_text"] = "(Demo candidate — no real resume)"
             await db.candidates.insert_many(DEMO_CANDIDATES)
-            print(f"  ✓ Inserted {len(DEMO_CANDIDATES)} demo candidates")
+            print(f"  Inserted {len(DEMO_CANDIDATES)} demo candidates")
         else:
-            print(f"  ✓ Demo candidates already exist ({existing_candidates} found)")
+            print(f"  Demo candidates already exist ({existing_candidates} found)")
 
-    print("\n✅ Seed complete!")
+    print("\nSeed complete!")
     print("   Demo Login → email: demo@hireflow.ai  |  password: demo1234")
     client.close()
 

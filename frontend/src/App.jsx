@@ -7,6 +7,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const InterviewSession = lazy(() => import('./pages/InterviewSession'));
+const CandidateApply = lazy(() => import('./pages/CandidateApply'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const queryClient = new QueryClient();
@@ -36,6 +38,8 @@ function App() {
                       </ProtectedRoute>
                     } 
                   />
+                  <Route path="/apply/:jobId" element={<CandidateApply />} />
+                  <Route path="/interview/:sessionId" element={<InterviewSession />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

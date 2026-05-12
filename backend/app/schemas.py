@@ -73,3 +73,45 @@ class CandidateOut(CandidateBase):
     model_config = {
         "populate_by_name": True
     }
+
+class InterviewMessage(BaseModel):
+    role: str # user or assistant
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class InterviewSessionCreate(BaseModel):
+    candidate_id: str
+    job_id: str
+    difficulty: str = "medium"
+    total_questions: int = 6
+    focus_areas: List[str] = []
+    custom_instructions: Optional[str] = None
+
+class InterviewInviteCreate(InterviewSessionCreate):
+    expires_in_hours: int = 48
+
+class InterviewInviteOut(BaseModel):
+    session_id: str
+    interview_url: str
+    expires_at: datetime
+
+class InterviewSessionOut(BaseModel):
+    id: str = Field(alias="_id")
+    candidate_id: str
+    job_id: str
+    status: str = "ongoing" # ongoing, completed
+    history: List[InterviewMessage] = []
+    final_report: Optional[str] = None
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[EmailStr] = None
+    job_title: Optional[str] = None
+    total_questions: int = 6
+    difficulty: str = "medium"
+    focus_areas: List[str] = []
+    custom_instructions: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {
+        "populate_by_name": True
+    }
