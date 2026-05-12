@@ -20,9 +20,10 @@ load_dotenv()
 
 from .db import get_db, init_db
 from .schemas import (
-    JobCreate, JobOut, CandidateOut, AIInsights, 
+    JobCreate, JobOut, JobUpdate, CandidateOut, CandidateUpdate, AIInsights, 
     UserCreate, UserOut, Token, UserLogin, VerifyOTP,
-    ProfileUpdate, PasswordChange
+    ForgotPasswordRequest, ResetPasswordRequest,
+    ProfileUpdate, PasswordChange, SettingsUpdate
 )
 from .ai_service import ResumeAI
 from .auth import get_password_hash, verify_password, create_access_token, get_current_user
