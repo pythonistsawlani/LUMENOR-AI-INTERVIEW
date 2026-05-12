@@ -57,7 +57,8 @@ export default function Dashboard() {
       addToast('Candidate moved', 'success');
     }
   });
-
+  const sendInviteMutation = useMutation({
+    mutationFn: ({ candidateId, jobId }) => api.post('/interviews/invite', { candidate_id: candidateId, job_id: jobId }),
     onSuccess: () => addToast('Interview invite sent!', 'success'),
     onError: (err) => addToast(err?.response?.data?.detail || 'Failed to send invite', 'error')
   });
