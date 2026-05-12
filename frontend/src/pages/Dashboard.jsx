@@ -6,7 +6,7 @@ import {
   Users, UserPlus, CheckCircle, Clock, 
   Search, Bell, Settings, LogOut, FileText, BarChart3, Plus, Target, Inbox, Mail, Copy,
   X, ExternalLink, ChevronRight, Filter, SortDesc, TrendingUp, BrainCircuit, AlertCircle, Briefcase, Loader2,
-  Building, LayoutDashboard
+  Building, LayoutDashboard, Phone
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
 import { useAuth } from '../context/AuthContext';
