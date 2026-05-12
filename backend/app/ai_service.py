@@ -10,15 +10,12 @@ load_dotenv()
 def _extract_json(text: str) -> dict:
     """Robustly extract JSON from model output that may contain extra text."""
     text = text.strip()
-    # Remove markdown code fences
     text = re.sub(r"```json\s*", "", text)
     text = re.sub(r"```\s*", "", text)
-    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Try to find first {...} block
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:
@@ -37,8 +34,6 @@ class ResumeAI:
     def analyze_resume(self, resume_text: str, job_description: str, job_requirements: list) -> dict:
         """Analyzes a resume against a job description using Hugging Face Inference API."""
         requirements_str = ", ".join(job_requirements) if job_requirements else "Not specified"
-
-        # Truncate resume to avoid token overflow
         resume_snippet = resume_text[:3000] if len(resume_text) > 3000 else resume_text
 
         prompt = f"""You are an expert technical recruiter. Analyze the candidate's resume against the job requirements.
@@ -51,7 +46,7 @@ Candidate Resume:
 {resume_snippet}
 
 IMPORTANT: Respond ONLY with a valid JSON object. No explanation, no markdown.
-Score the candidate STRICTLY based on how well they match. Be honest:
+Score the candidate STRICTLY based on how well they match. Be honest and differentiated:
 - 85-100: Exceptional match, all requirements met
 - 70-84: Strong match, most requirements met
 - 55-69: Moderate match, some gaps
@@ -81,11 +76,9 @@ Score the candidate STRICTLY based on how well they match. Be honest:
             raw = response.choices[0].message.content
             result = _extract_json(raw)
 
-            # Validate and clamp score
             score = int(result.get("match_score", 50))
             result["match_score"] = max(0, min(100, score))
 
-            # Validate recommendation label
             if result["match_score"] >= 75:
                 result["recommendation_label"] = "Strong Fit"
             elif result["match_score"] >= 55:
@@ -125,17 +118,39 @@ class InterviewAI:
     ) -> str:
         """Generates the next interview question based on conversation history."""
         focus_areas = focus_areas or []
-        focus_text = ", ".join(focus_areas) if focus_areas else "general role fit and technical skills"
+        focus_text = ", ".join(focus_areas) if focus_areas else "technical skills and role-specific experience"
         custom_text = custom_instructions or ""
 
+        # Count how many questions have been asked
+        asked_count = sum(1 for m in history if m.get("role") == "assistant")
+
+        # Determine question type based on position in interview
+        if asked_count == 0:
+            q_guidance = "Start with a warm, open-ended question like 'Tell me about yourself' or 'Walk me through your background'."
+        elif asked_count == 1:
+            q_guidance = "Ask a technical question DIRECTLY related to the job's core skills and technologies."
+        elif asked_count == 2:
+            q_guidance = "Ask a behavioral question using the STAR format (e.g., 'Tell me about a time when...')."
+        elif asked_count == 3:
+            q_guidance = "Ask a role-specific scenario or problem-solving question about a real challenge they might face in this job."
+        else:
+            q_guidance = "Ask a follow-up question based on their previous answers, or ask about their career goals and why they want this role."
+
         system_prompt = (
-            f"You are a professional interviewer conducting a {difficulty}-difficulty interview for a {job_title} role.\n"
-            f"Job: {job_desc[:300]}\n"
-            f"Candidate background: {resume_summary}\n"
-            f"Focus areas: {focus_text}\n"
-            f"{'Extra instructions: ' + custom_text if custom_text else ''}\n"
-            f"Rules: Ask ONE specific question at a time. Do not repeat questions already asked. "
-            f"Be conversational but professional. Vary between technical and behavioral questions."
+            f"You are a professional interviewer conducting a structured {difficulty}-difficulty job interview.\n\n"
+            f"POSITION: {job_title}\n"
+            f"JOB CONTEXT: {job_desc[:400]}\n"
+            f"CANDIDATE BACKGROUND: {resume_summary[:300]}\n"
+            f"FOCUS AREAS: {focus_text}\n"
+            f"{'EXTRA INSTRUCTIONS: ' + custom_text if custom_text else ''}\n\n"
+            f"CRITICAL RULES:\n"
+            f"- ONLY ask questions directly relevant to the '{job_title}' position\n"
+            f"- Do NOT ask questions about unrelated fields or academic disciplines\n"
+            f"- Do NOT repeat any question already asked in the conversation\n"
+            f"- Ask EXACTLY ONE question per turn\n"
+            f"- Be conversational, professional, and encouraging\n"
+            f"- Keep the question concise (1-2 sentences max)\n"
+            f"- QUESTION GUIDANCE FOR THIS TURN: {q_guidance}"
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -149,31 +164,31 @@ class InterviewAI:
 
         messages.append({
             "role": "user",
-            "content": "Ask the next interview question. Ask only ONE question. Be concise and specific."
+            "content": "Now ask your next interview question. Remember: ONE question only, directly relevant to this specific job role."
         })
 
         try:
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=250,
-                temperature=0.7
+                max_tokens=200,
+                temperature=0.6
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"[InterviewAI Question Error] {e}")
-            fallbacks = [
-                "Can you describe a challenging technical problem you solved recently?",
-                "How do you approach debugging a complex issue in production?",
-                "Walk me through your experience with the core technologies in this role.",
-                "Tell me about a time you had to learn something quickly under pressure.",
+            role_fallbacks = [
+                f"Tell me about yourself and what draws you to the {job_title} role.",
+                f"Can you walk me through a recent project most relevant to {job_title}?",
+                "Describe a challenging problem you solved at work and how you approached it.",
+                "What are your strongest technical skills for this position?",
+                "Where do you see yourself growing professionally in the next 2 years?",
             ]
-            # Pick based on history length to avoid repeating
-            return fallbacks[len(history) % len(fallbacks)]
+            return role_fallbacks[len(history) % len(role_fallbacks)]
 
     async def evaluate_response(self, question: str, answer: str) -> str:
         """Evaluates a single interview response — used for inline feedback."""
         messages = [
-            {"role": "system", "content": "You are an interviewer giving brief, honest feedback on a candidate's answer. One sentence only."},
+            {"role": "system", "content": "You are an interviewer giving brief, constructive feedback on a candidate's answer. Be encouraging but honest. One sentence only."},
             {"role": "user", "content": f"Question: {question}\nAnswer: {answer}\nGive a one-sentence evaluation of this answer quality."}
         ]
         try:
@@ -181,10 +196,10 @@ class InterviewAI:
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"[InterviewAI Evaluate Error] {e}")
-            return "Response noted, moving on."
+            return "Thank you for your response, let's continue."
 
     async def generate_final_report(self, history: list) -> str:
-        """Generates a structured final interview report with actual scoring."""
+        """Generates a structured final interview report with balanced, constructive feedback."""
         if not history:
             return "No interview data available."
 
@@ -205,58 +220,61 @@ class InterviewAI:
             {
                 "role": "system",
                 "content": (
-                    "You are a senior hiring manager generating a detailed interview assessment report. "
-                    "Be objective and honest. Score based on actual answer quality shown in the transcript. "
-                    "Different candidates should get different scores. Do not always give 70/100."
+                    "You are a senior hiring manager generating a balanced, professional interview assessment. "
+                    "Be fair and constructive — not every short answer means a bad candidate. "
+                    "Consider that this is an asynchronous AI interview and candidates may be nervous. "
+                    "Focus on what was actually said. Give credit where it's due. "
+                    "If answers were brief, note 'limited data' rather than judging harshly. "
+                    "Never use the word 'weak' repeatedly. Always end with actionable recruiter notes."
                 )
             },
             {
                 "role": "user",
-                "content": f"""Review this complete interview transcript and generate a detailed assessment.
+                "content": f"""Review this complete interview transcript and generate a professional assessment report.
 
-TRANSCRIPT:
-{transcript[:3500]}
+INTERVIEW TRANSCRIPT:
+{transcript[:4000]}
 
-Total questions answered: {qa_count}
+Total responses given: {qa_count}
 
-Generate a structured report in this EXACT format:
+Generate the report in this EXACT format (fill in all sections):
 
 OVERALL SCORE: [X/100]
 
 PERFORMANCE SUMMARY:
-[2-3 sentences about overall performance]
+[2-3 balanced sentences about overall performance, noting what was shown and any gaps]
 
 STRENGTHS:
-• [Specific strength observed]
-• [Specific strength observed]
-• [Specific strength observed]
+• [Strength observed — if limited data, note "Demonstrated willingness to engage"]
+• [Strength or positive trait observed]
+• [Strength or positive trait observed]
 
 AREAS FOR IMPROVEMENT:
-• [Specific gap or weakness]
-• [Specific gap or weakness]
+• [Specific constructive suggestion]
+• [Specific constructive suggestion]
 
-COMMUNICATION SKILLS: [Excellent/Good/Average/Poor]
-TECHNICAL KNOWLEDGE: [Excellent/Good/Average/Poor]
-PROBLEM SOLVING: [Excellent/Good/Average/Poor]
+COMMUNICATION SKILLS: [Excellent / Good / Average / Needs Development]
+TECHNICAL KNOWLEDGE: [Excellent / Good / Average / Needs Development]
+PROBLEM SOLVING: [Excellent / Good / Average / Needs Development]
 
-HIRING RECOMMENDATION: [Strongly Recommend / Recommend / Consider / Do Not Recommend]
+HIRING RECOMMENDATION: [Strongly Recommend / Recommend / Consider for Further Interview / Not Recommended at This Time]
 
 NOTES FOR RECRUITER:
-[1-2 sentences with specific observations the recruiter should know]
+[1-2 constructive sentences. If interview had limited responses, recommend a follow-up call rather than immediate rejection.]
 
-Score guidelines:
-- 85-100: Exceptional answers, deep expertise shown
-- 70-84: Good answers with minor gaps
-- 55-69: Adequate answers, some weak responses
-- 40-54: Several weak answers, significant gaps
-- Below 40: Poor performance, major concerns"""
+SCORING GUIDE:
+- 80-100: Strong answers, clear expertise and communication
+- 65-79: Good answers with minor gaps, worth pursuing
+- 50-64: Mixed responses, recommend follow-up interview
+- 35-49: Limited answers, needs further assessment before decision
+- Below 35: Very limited engagement, consider follow-up call first"""
             }
         ]
 
         try:
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=600,
+                max_tokens=700,
                 temperature=0.4
             )
             report = response.choices[0].message.content.strip()
@@ -265,14 +283,22 @@ Score guidelines:
             raise ValueError("Report too short")
         except Exception as e:
             print(f"[InterviewAI Report Error] {e}")
-            # Dynamic fallback based on actual answer count
-            base_score = min(50 + (qa_count * 3), 75)
+            base_score = min(50 + (qa_count * 5), 70)
             return (
                 f"OVERALL SCORE: {base_score}/100\n\n"
                 f"PERFORMANCE SUMMARY:\n"
-                f"Candidate completed {qa_count} interview questions. "
-                f"Full AI analysis unavailable — manual review recommended.\n\n"
-                f"HIRING RECOMMENDATION: Consider\n\n"
+                f"Candidate completed {qa_count} interview question(s). "
+                f"Full AI scoring unavailable — manual review recommended.\n\n"
+                f"STRENGTHS:\n"
+                f"• Completed the AI interview process\n"
+                f"• Showed availability and interest in the role\n\n"
+                f"AREAS FOR IMPROVEMENT:\n"
+                f"• More detailed responses would strengthen evaluation\n\n"
+                f"COMMUNICATION SKILLS: Average\n"
+                f"TECHNICAL KNOWLEDGE: Needs Assessment\n"
+                f"PROBLEM SOLVING: Needs Assessment\n\n"
+                f"HIRING RECOMMENDATION: Consider for Further Interview\n\n"
                 f"NOTES FOR RECRUITER:\n"
-                f"AI scoring service was unavailable. Please review the transcript manually."
+                f"AI scoring service was temporarily unavailable. "
+                f"A follow-up phone screen is recommended to properly assess this candidate."
             )
