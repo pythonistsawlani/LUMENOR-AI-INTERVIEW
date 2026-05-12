@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 from bson import ObjectId
+from pymongo.errors import PyMongoError
 from datetime import datetime
 from datetime import timedelta
 import pymupdf
@@ -99,42 +100,67 @@ async def _send_email(to_email: str, subject: str, body: str) -> bool:
 async def health():
     return {"status": "ok"}
 
+@app.get("/api/health/db")
+async def health_db():
+    try:
+        db = await get_db()
+        await db.command("ping")
+        return {"status": "ok", "database": "connected"}
+    except PyMongoError as exc:
+        print(f"Database health check failed: {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "unavailable"},
+        )
+
 # --- AUTH ---
 @app.post("/api/auth/register", response_model=UserOut)
 async def register(user: UserCreate):
     db = await get_db()
-    if await db.users.find_one({"email": user.email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-        
-    user_dict = user.dict()
-    user_dict["password"] = get_password_hash(user_dict["password"])
-    user_dict["created_at"] = datetime.utcnow()
-    
-    result = await db.users.insert_one(user_dict)
-    created_user = await db.users.find_one({"_id": result.inserted_id})
-    return fix_id(created_user)
+    try:
+        if await db.users.find_one({"email": user.email}):
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        user_dict = user.dict()
+        user_dict["password"] = get_password_hash(user_dict["password"])
+        user_dict["created_at"] = datetime.utcnow()
+
+        result = await db.users.insert_one(user_dict)
+        created_user = await db.users.find_one({"_id": result.inserted_id})
+        return fix_id(created_user)
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        print(f"Database error during registration: {exc}")
+        raise HTTPException(status_code=503, detail="Database connection failed. Check backend MONGO_URI.")
 
 @app.post("/api/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     db = await get_db()
-    user = await db.users.find_one({"email": form_data.username})
-    if not user or not verify_password(form_data.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-        
-    access_token = create_access_token(
-        data={"sub": str(user["_id"]), "type": "access"},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "user": {
-            "id": str(user["_id"]),
-            "email": user["email"],
-            "name": user["name"],
-            "role": user["role"]
+    try:
+        user = await db.users.find_one({"email": form_data.username})
+        if not user or not verify_password(form_data.password, user["password"]):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+        access_token = create_access_token(
+            data={"sub": str(user["_id"]), "type": "access"},
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": str(user["_id"]),
+                "email": user["email"],
+                "name": user["name"],
+                "role": user["role"]
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        print(f"Database error during login: {exc}")
+        raise HTTPException(status_code=503, detail="Database connection failed. Check backend MONGO_URI.")
 
 # --- JOBS ---
 

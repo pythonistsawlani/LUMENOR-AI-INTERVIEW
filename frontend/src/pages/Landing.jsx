@@ -64,6 +64,18 @@ const FEATURES = [
   },
 ];
 
+function getAuthErrorMessage(err) {
+  if (err?.code === 'ECONNABORTED') {
+    return 'Backend is taking too long to respond. Check Render logs and MongoDB connection.';
+  }
+
+  if (err?.code === 'ERR_NETWORK' || !err?.response) {
+    return 'Cannot reach backend. Check VITE_API_URL and backend CORS settings.';
+  }
+
+  return err?.response?.data?.detail || 'Authentication failed. Please try again.';
+}
+
 export default function Landing() {
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -85,8 +97,7 @@ export default function Landing() {
       }
       navigate('/dashboard');
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Authentication failed. Please try again.';
-      addToast(msg, 'error');
+      addToast(getAuthErrorMessage(err), 'error');
     } finally {
       setLoading(false);
     }

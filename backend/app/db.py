@@ -5,7 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(MONGO_URI)
+client = AsyncIOMotorClient(
+    MONGO_URI,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+)
 db = client.hireflow_db
 
 async def get_db():
@@ -15,6 +20,7 @@ async def init_db():
     try:
         # Set a short timeout for index creation to avoid hanging on Render
         print("Connecting to MongoDB and verifying indexes...")
+        await db.command("ping")
         await db.jobs.create_index("recruiter_id")
         await db.jobs.create_index([("recruiter_id", 1), ("status", 1)])
         await db.candidates.create_index("applied_job_id")
