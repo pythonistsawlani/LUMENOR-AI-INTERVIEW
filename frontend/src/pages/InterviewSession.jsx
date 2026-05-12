@@ -3,15 +3,16 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, User, Bot, CheckCircle } from 'lucide-react';
 import axios from 'axios';
-import api from '../api';
+import api, { API_BASE_URL } from '../api';
+
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+});
 
 const InterviewSession = () => {
   const { sessionId } = useParams();
   const searchParams = new URLSearchParams(window.location.search);
   const accessToken = searchParams.get('token');
-  const publicApi = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api",
-  });
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');

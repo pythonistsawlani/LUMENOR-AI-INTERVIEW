@@ -1,7 +1,37 @@
 import axios from "axios";
 
+const DEFAULT_API_URL = "http://127.0.0.1:8000/api";
+
+export function normalizeApiBaseUrl(value) {
+  const rawValue = String(value || DEFAULT_API_URL).trim();
+  const baseUrl = rawValue.replace(/\/+$/, "");
+
+  if (!baseUrl) {
+    return DEFAULT_API_URL;
+  }
+
+  if (/\/api$/i.test(baseUrl)) {
+    return baseUrl;
+  }
+
+  try {
+    const parsedUrl = new URL(baseUrl);
+    if (parsedUrl.pathname === "/" || parsedUrl.pathname === "") {
+      return `${baseUrl}/api`;
+    }
+  } catch {
+    if (baseUrl === "/") {
+      return "/api";
+    }
+  }
+
+  return baseUrl;
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api",
+  baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use((config) => {
