@@ -81,6 +81,25 @@ export default function Dashboard() {
     }
   });
 
+  const deleteJobMutation = useMutation({
+    mutationFn: (jobId) => api.delete(`/jobs/${jobId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      addToast('Job deleted successfully', 'success');
+    },
+    onError: (err) => addToast(err?.response?.data?.detail || 'Failed to delete job', 'error')
+  });
+
+  const updateJobStatusMutation = useMutation({
+    mutationFn: ({ jobId, status }) => api.patch(`/jobs/${jobId}`, { status }),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['myJobs'] });
+      addToast(`Job ${vars.status === 'open' ? 'reopened' : 'closed'}`, 'success');
+    },
+    onError: (err) => addToast(err?.response?.data?.detail || 'Failed to update job', 'error')
+  });
+
   // Filtered Candidates
   const filteredCandidates = useMemo(() => {
     if (!candidates) return [];
@@ -157,7 +176,7 @@ export default function Dashboard() {
         <nav className="p-4 flex-1 space-y-2">
           <NavItem icon={<Inbox className="w-4 h-4" />} label="Pipeline" active={activeTab === 'pipeline'} onClick={() => setActiveTab('pipeline')} />
           <NavItem icon={<BarChart3 className="w-4 h-4" />} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
-          <NavItem icon={<FileText className="w-4 h-4" />} label="My Jobs" />
+          <NavItem icon={<FileText className="w-4 h-4" />} label="My Jobs" active={activeTab === 'jobs'} onClick={() => setActiveTab('jobs')} />
           <NavItem icon={<Settings className="w-4 h-4" />} label="Settings" onClick={() => navigate('/settings')} />
         </nav>
 
@@ -275,6 +294,145 @@ export default function Dashboard() {
                           inviteLoading={sendInviteMutation.isPending}
                           stageOrder={STAGE_ORDER}
                         />
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ) : activeTab === 'jobs' ? (
+                <motion.div key="jobs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black text-white">My Job Postings</h2>
+                      <p className="text-slate-500 text-sm mt-1">{jobs?.length || 0} total jobs · {jobs?.filter(j => j.status === 'open').length || 0} active</p>
+                    </div>
+                    <button
+                      onClick={() => setJobModalOpen(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                    >
+                      <Plus className="w-4 h-4" /> Post New Job
+                    </button>
+                  </div>
+
+                  {/* Stats Row */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-5 rounded-2xl bg-white/5 border border-white/10">
+                      <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Total Jobs</p>
+                      <p className="text-3xl font-black text-white mt-1">{jobs?.length || 0}</p>
+                    </div>
+                    <div className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+                      <p className="text-xs text-emerald-500 uppercase tracking-widest font-bold">Open</p>
+                      <p className="text-3xl font-black text-emerald-400 mt-1">{jobs?.filter(j => j.status === 'open').length || 0}</p>
+                    </div>
+                    <div className="p-5 rounded-2xl bg-slate-500/5 border border-slate-500/20">
+                      <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Closed</p>
+                      <p className="text-3xl font-black text-slate-400 mt-1">{jobs?.filter(j => j.status !== 'open').length || 0}</p>
+                    </div>
+                  </div>
+
+                  {/* Job Cards */}
+                  {jobsLoading ? (
+                    <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-32 rounded-2xl bg-white/5 animate-pulse" />)}</div>
+                  ) : jobs?.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-4">
+                      <Briefcase className="w-12 h-12 text-slate-700" />
+                      <p className="text-slate-500">No job postings yet.</p>
+                      <button onClick={() => setJobModalOpen(true)} className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-500 transition-all">Post Your First Job</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {jobs.map(job => (
+                        <motion.div
+                          key={job._id}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`p-6 rounded-2xl border backdrop-blur-md transition-all ${
+                            job.status === 'open'
+                              ? 'bg-white/5 border-white/10 hover:border-indigo-500/30'
+                              : 'bg-white/[0.02] border-white/5 opacity-70'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <h3 className="text-base font-black text-white">{job.title}</h3>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${
+                                  job.status === 'open'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : 'bg-slate-500/10 text-slate-500 border-slate-500/20'
+                                }`}>
+                                  {job.status === 'open' ? '● Open' : '○ Closed'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                                <span>{job.job_type}</span>
+                                <span>·</span>
+                                <span>{job.experience_level}</span>
+                                {job.salary_range && <><span>·</span><span>{job.salary_range}</span></>}
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {job.skills_required?.slice(0, 5).map(s => (
+                                  <span key={s} className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold">{s}</span>
+                                ))}
+                                {job.skills_required?.length > 5 && <span className="text-[10px] text-slate-600">+{job.skills_required.length - 5} more</span>}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {/* Copy Apply Link */}
+                              <button
+                                onClick={() => copyApplyLink(job._id)}
+                                title="Copy Apply Link"
+                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-400 bg-white/5 border border-white/10 rounded-xl hover:text-white hover:bg-white/10 transition-all"
+                              >
+                                <Copy className="w-3.5 h-3.5" /> Link
+                              </button>
+
+                              {/* Toggle Open/Close */}
+                              <button
+                                onClick={() => updateJobStatusMutation.mutate({ jobId: job._id, status: job.status === 'open' ? 'closed' : 'open' })}
+                                disabled={updateJobStatusMutation.isPending}
+                                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+                                  job.status === 'open'
+                                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500 hover:text-white'
+                                    : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                                }`}
+                              >
+                                {job.status === 'open' ? '⏸ Close' : '▶ Reopen'}
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Delete "${job.title}"? This cannot be undone.`)) {
+                                    deleteJobMutation.mutate(job._id);
+                                  }
+                                }}
+                                disabled={deleteJobMutation.isPending}
+                                title="Delete Job"
+                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                              >
+                                <X className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Bottom row: candidates count + apply link */}
+                          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <Users className="w-3.5 h-3.5" />
+                              <span>{candidates?.filter(c => c.applied_job_id === job._id).length || 0} candidates applied</span>
+                            </div>
+                            <button
+                              onClick={() => { setActiveJobId(job._id); setActiveTab('pipeline'); }}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 transition-colors"
+                            >
+                              View Pipeline <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </motion.div>
                       ))}
                     </div>
                   )}
