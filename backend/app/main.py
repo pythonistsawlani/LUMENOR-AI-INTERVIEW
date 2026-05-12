@@ -77,35 +77,49 @@ def _generate_numeric_code() -> str:
 
 
 def _send_email_sync(to_email: str, subject: str, body: str) -> bool:
-    """Synchronous SMTP sender — safe to run in thread pool."""
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_username = os.getenv("SMTP_USERNAME")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM")
-    if not all([smtp_host, smtp_username, smtp_password, smtp_from]):
-        print(f"[Email Disabled] Subject={subject} To={to_email} Body={body}")
+    """Send email via Brevo HTTP API (SMTP port blocked on Render free tier)."""
+    import urllib.request, json as _json
+    brevo_api_key = os.getenv("BREVO_API_KEY")
+    smtp_from = os.getenv("SMTP_FROM", "")
+
+    if not brevo_api_key or not smtp_from:
+        print(f"[Email Disabled] BREVO_API_KEY or SMTP_FROM not set. To={to_email} Subject={subject}")
         return False
 
-    msg = MIMEText(body, "plain")
-    msg["Subject"] = subject
-    msg["From"] = smtp_from
-    msg["To"] = to_email
-
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-        server.starttls()
-        server.login(smtp_username, smtp_password)
-        server.sendmail(smtp_from, [to_email], msg.as_string())
-    return True
+    payload = {
+        "sender": {"name": "HireFlow AI", "email": smtp_from},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "textContent": body,
+    }
+    data = _json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=data,
+        headers={
+            "accept": "application/json",
+            "api-key": brevo_api_key,
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"[Email Sent] To={to_email} Status={resp.status}")
+            return resp.status == 201
+    except Exception as exc:
+        print(f"[Email Error] {exc}")
+        return False
 
 
 async def _send_email(to_email: str, subject: str, body: str) -> bool:
-    """Non-blocking wrapper — runs SMTP in thread pool."""
+    """Non-blocking wrapper."""
     try:
         return await asyncio.to_thread(_send_email_sync, to_email, subject, body)
     except Exception as exc:
         print(f"[Email Error] {exc}")
         return False
+
 
 @app.get("/api/health")
 async def health():
