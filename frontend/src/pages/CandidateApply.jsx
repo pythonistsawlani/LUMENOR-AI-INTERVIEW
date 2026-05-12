@@ -82,8 +82,13 @@ export default function CandidateApply() {
       
       <div className="w-full max-w-2xl relative z-10">
         <header className="mb-10 text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl font-black text-white shadow-xl shadow-indigo-600/20">
+              {job.company_name?.charAt(0) || 'H'}
+            </div>
+          </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-4">
-            <Sparkles className="w-3 h-3" /> Career Opportunities
+            <Sparkles className="w-3 h-3" /> {job.company_name || 'HireFlow AI'} Hiring
           </div>
           <h1 className="text-4xl font-black text-white mb-2 tracking-tight">{job.title}</h1>
           <p className="text-slate-400 flex items-center justify-center gap-4 text-sm font-medium">

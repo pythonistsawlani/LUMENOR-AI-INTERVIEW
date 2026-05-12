@@ -252,9 +252,44 @@ async def verify_login(payload: VerifyOTP):
             "name": user["name"],
             "company_name": user.get("company_name"),
             "company_logo": user.get("company_logo"),
-            "role": user.get("role", "recruiter")
+            "role": user.get("role", "recruiter"),
+            "is_verified": True
         }
     }
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    db = await get_db()
+    user = await db.users.find_one({"email": payload.email})
+    if not user:
+        return {"message": "If this email exists, an OTP has been sent."}
+    
+    otp = await _create_otp(payload.email, "reset")
+    background_tasks.add_task(
+        _send_email_sync,
+        payload.email,
+        "Password Reset Code",
+        f"Your HireFlow password reset code is: {otp}\nExpires in 10 minutes."
+    )
+    return {"message": "OTP sent to your email"}
+
+@app.post("/api/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    db = await get_db()
+    otp_doc = await db.otps.find_one({"email": payload.email, "type": "reset"})
+    
+    if not otp_doc or datetime.utcnow() > otp_doc["expires_at"]:
+        raise HTTPException(status_code=400, detail="OTP expired or invalid")
+    
+    if otp_doc["otp_hash"] != _hash_value(payload.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    await db.users.update_one(
+        {"email": payload.email},
+        {"$set": {"password": get_password_hash(payload.new_password)}}
+    )
+    await db.otps.delete_one({"_id": otp_doc["_id"]})
+    return {"message": "Password reset successful. You can now login."}
 
 # --- PROFILE & SETTINGS ---
 
@@ -276,6 +311,13 @@ async def update_profile(profile: ProfileUpdate, current_user_id: str = Depends(
     await db.users.update_one({"_id": parse_object_id(current_user_id)}, {"$set": update_data})
     updated_user = await db.users.find_one({"_id": parse_object_id(current_user_id)})
     return fix_id(updated_user)
+
+@app.patch("/api/settings")
+async def update_settings(settings: SettingsUpdate, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+    await db.users.update_one({"_id": parse_object_id(current_user_id)}, {"$set": {"settings": update_data}})
+    return {"message": "Settings updated successfully"}
 
 @app.post("/api/auth/change-password")
 async def change_password(payload: PasswordChange, current_user_id: str = Depends(get_current_user)):
@@ -314,6 +356,23 @@ async def get_my_jobs(current_user_id: str = Depends(get_current_user)):
     db = await get_db()
     jobs = await db.jobs.find({"recruiter_id": current_user_id}).to_list(100)
     return [fix_id(job) for job in jobs]
+
+@app.patch("/api/jobs/{job_id}")
+async def update_job(job_id: str, payload: JobUpdate, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    res = await db.jobs.update_one({"_id": parse_object_id(job_id, "job_id"), "recruiter_id": current_user_id}, {"$set": update_data})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"message": "Job updated"}
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    res = await db.jobs.delete_one({"_id": parse_object_id(job_id, "job_id"), "recruiter_id": current_user_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"message": "Job deleted"}
 
 
 @app.get("/api/public/jobs/{job_id}")
@@ -568,6 +627,23 @@ async def update_candidate_status(candidate_id: str, status: str, current_user_i
         raise HTTPException(status_code=404, detail="Candidate not found")
         
     return {"status": "updated"}
+
+@app.patch("/api/candidates/{candidate_id}")
+async def update_candidate(candidate_id: str, payload: CandidateUpdate, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    res = await db.candidates.update_one({"_id": parse_object_id(candidate_id, "candidate_id"), "recruiter_id": current_user_id}, {"$set": update_data})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return {"message": "Candidate updated"}
+
+@app.delete("/api/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: str, current_user_id: str = Depends(get_current_user)):
+    db = await get_db()
+    res = await db.candidates.delete_one({"_id": parse_object_id(candidate_id, "candidate_id"), "recruiter_id": current_user_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return {"message": "Candidate deleted"}
 
 # --- ANALYTICS ---
 

@@ -21,7 +21,9 @@ export default function Settings() {
     if (user) {
       setProfileForm({
         name: user.name || '',
-        company_name: user.company_name || ''
+        company_name: user.company_name || '',
+        website: user.website || '',
+        company_description: user.company_description || ''
       });
     }
   }, [user]);
@@ -153,14 +155,34 @@ export default function Settings() {
                     <Building className="w-5 h-5 text-indigo-400" /> Company Profile
                   </h3>
                   <form onSubmit={handleUpdateProfile} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-400">Company Name</label>
+                        <input
+                          required
+                          value={profileForm.company_name}
+                          onChange={(e) => setProfileForm({ ...profileForm, company_name: e.target.value })}
+                          placeholder="e.g. Acme Innovations"
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-400">Company Website</label>
+                        <input
+                          value={profileForm.website || ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })}
+                          placeholder="https://acme.inc"
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-400">Company Name</label>
-                      <input
-                        required
-                        value={profileForm.company_name}
-                        onChange={(e) => setProfileForm({ ...profileForm, company_name: e.target.value })}
-                        placeholder="e.g. Acme Innovations"
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500 transition-all"
+                      <label className="text-sm font-medium text-slate-400">Company Description</label>
+                      <textarea
+                        value={profileForm.company_description || ''}
+                        onChange={(e) => setProfileForm({ ...profileForm, company_description: e.target.value })}
+                        placeholder="Tell candidates about your company culture and mission..."
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500 transition-all min-h-[100px] resize-none"
                       />
                     </div>
                     <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20">

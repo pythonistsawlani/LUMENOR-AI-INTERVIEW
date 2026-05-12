@@ -120,6 +120,37 @@ export default function Landing() {
     }
   };
 
+  const handleForgotPasswordRequest = async () => {
+    if (!form.email) return addToast('Please enter your email', 'error');
+    setLoading(true);
+    try {
+      await api.post('/auth/forgot-password', { email: form.email });
+      addToast('Reset code sent to your email', 'success');
+      setAuthStage('verify');
+    } catch (err) {
+      addToast(getAuthErrorMessage(err), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!form.password) return addToast('Please enter new password', 'error');
+    setLoading(true);
+    try {
+      await api.post('/auth/reset-password', { email: form.email, otp: form.otp, new_password: form.password });
+      addToast('Password reset successful! Please login.', 'success');
+      setAuthMode('login');
+      setAuthStage('form');
+      setForm({ ...form, otp: '', password: '' });
+    } catch (err) {
+      addToast(getAuthErrorMessage(err), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resetAuth = () => {
     setAuthMode(null);
     setAuthStage('form');
@@ -227,37 +258,63 @@ export default function Landing() {
                       </div>
                     </>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-300">Email Address</label>
-                    <input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@company.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-300">Password</label>
-                    <input required type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" minLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
-                  </div>
-                  <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all disabled:opacity-60">
-                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {authMode === 'login' ? 'Request Login OTP' : 'Create Account'}
-                  </button>
+                  {authMode === 'forgot' ? (
+                    <div className="space-y-4">
+                       <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-300">Registered Email</label>
+                        <input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@company.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
+                      </div>
+                      <button type="button" onClick={handleForgotPasswordRequest} disabled={loading} className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-60">
+                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Send Reset Code
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-300">Email Address</label>
+                        <input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@company.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-medium text-slate-300">Password</label>
+                          {authMode === 'login' && (
+                            <button type="button" onClick={() => setAuthMode('forgot')} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Forgot password?</button>
+                          )}
+                        </div>
+                        <input required type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" minLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
+                      </div>
+                      <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all disabled:opacity-60">
+                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {authMode === 'login' ? 'Request Login OTP' : 'Create Account'}
+                      </button>
+                    </>
+                  )}
                   <p className="text-center text-sm text-slate-400 pt-1">
                     {authMode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-                    <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-medium">{authMode === 'login' ? 'Sign up free' : 'Sign in'}</button>
+                    <button type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setAuthStage('form'); }} className="text-indigo-400 font-medium">{authMode === 'login' ? 'Sign up free' : 'Sign in'}</button>
                   </p>
                 </form>
               ) : (
-                <form onSubmit={handleVerifyOTP} className="p-6 space-y-4 text-center">
+                <form onSubmit={authMode === 'forgot' ? handleResetPassword : handleVerifyOTP} className="p-6 space-y-4 text-center">
                   <div className="flex justify-center mb-4">
                     <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center">
                       <Mail className="w-6 h-6 text-indigo-400" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Enter 6-digit Code</label>
+                  <div className="space-y-2 text-left">
+                    <label className="text-sm font-medium text-slate-300 block text-center">Enter 6-digit Code</label>
                     <input required type="text" maxLength={6} value={form.otp} onChange={e => setForm({ ...form, otp: e.target.value })} placeholder="000000" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-center text-2xl font-bold tracking-[0.5em] text-white focus:border-indigo-500/70 transition-all" />
                   </div>
+                  {authMode === 'forgot' && (
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-sm font-medium text-slate-300">New Password</label>
+                      <input required type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" minLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-indigo-500/70 transition-all" />
+                    </div>
+                  )}
                   <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-60">
                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Verify & Continue
+                    {authMode === 'forgot' ? 'Reset Password' : 'Verify & Continue'}
                   </button>
                   <button type="button" onClick={() => setAuthStage('form')} className="text-sm text-slate-400 hover:text-white transition-colors">Go back</button>
                 </form>

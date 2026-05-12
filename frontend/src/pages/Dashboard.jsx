@@ -58,16 +58,25 @@ export default function Dashboard() {
     }
   });
 
-  const sendInviteMutation = useMutation({
-    mutationFn: ({ candidateId, jobId }) =>
-      api.post('/interviews/invite', {
-        candidate_id: candidateId,
-        job_id: jobId,
-        difficulty: 'medium',
-        total_questions: 6
-      }),
     onSuccess: () => addToast('Interview invite sent!', 'success'),
     onError: (err) => addToast(err?.response?.data?.detail || 'Failed to send invite', 'error')
+  });
+
+  const deleteCandidateMutation = useMutation({
+    mutationFn: (id) => api.delete(`/candidates/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      addToast('Candidate deleted', 'success');
+      setSelectedCandidate(null);
+    }
+  });
+
+  const updateCandidateDetailsMutation = useMutation({
+    mutationFn: ({ id, ...data }) => api.patch(`/candidates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      addToast('Changes saved', 'success');
+    }
   });
 
   // Filtered Candidates
@@ -312,6 +321,13 @@ export default function Dashboard() {
             onClose={() => setSelectedCandidate(null)} 
             onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })}
             inviteLoading={sendInviteMutation.isPending}
+            onDelete={(id) => {
+               if(window.confirm('Are you sure you want to delete this candidate?')) {
+                 deleteCandidateMutation.mutate(id);
+               }
+            }}
+            onUpdate={(id, data) => updateCandidateDetailsMutation.mutate({ id, ...data })}
+            saveLoading={updateCandidateDetailsMutation.isPending}
           />
         )}
       </AnimatePresence>
@@ -435,8 +451,10 @@ function CandidateCard({ candidate, onDragStart, onClick, onInvite, inviteLoadin
   );
 }
 
-function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
+function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading, onDelete, onUpdate, saveLoading }) {
   const name = candidate?.name || 'Unknown Candidate';
+  const [notes, setNotes] = useState(candidate?.notes || '');
+
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
@@ -447,14 +465,16 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         className="fixed top-0 right-0 h-full w-full max-w-xl bg-[#0F172A] border-l border-white/10 z-[70] shadow-2xl overflow-y-auto custom-scrollbar"
       >
-        <div className="p-8">
+        <div className="p-8 pb-24">
           <header className="flex items-center justify-between mb-8">
             <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-slate-400 transition-colors">
               <X className="w-6 h-6" />
             </button>
-            <div className="flex gap-3">
-              <button onClick={() => onInvite(candidate)} disabled={inviteLoading} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20">
-                <Mail className="w-4 h-4" /> {inviteLoading ? 'Sending...' : 'Send AI Interview'}
+            <div className="flex gap-2">
+              <button onClick={() => onUpdate(candidate._id, { status: 'hired' })} className="px-4 py-2 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg hover:bg-emerald-600 hover:text-white transition-all">Shortlist</button>
+              <button onClick={() => onUpdate(candidate._id, { status: 'rejected' })} className="px-4 py-2 bg-rose-600/10 border border-rose-500/20 text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all">Reject</button>
+              <button onClick={() => onDelete(candidate._id)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-rose-400 transition-colors">
+                <LogOut className="w-4 h-4 rotate-180" />
               </button>
             </div>
           </header>
@@ -463,11 +483,16 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
               {name.charAt(0).toUpperCase()}
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-3xl font-black text-white">{name}</h2>
-              <p className="text-slate-400 flex items-center gap-2 mt-1">
-                <Mail className="w-4 h-4" /> {candidate?.email || 'N/A'}
-              </p>
+              <div className="flex flex-wrap items-center gap-4 mt-2">
+                 <p className="text-slate-400 flex items-center gap-2 text-xs">
+                  <Mail className="w-3.5 h-3.5" /> {candidate?.email || 'N/A'}
+                </p>
+                <p className="text-slate-400 flex items-center gap-2 text-xs">
+                  <Phone className="w-3.5 h-3.5" /> {candidate?.phone || 'N/A'}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -485,6 +510,25 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
           </div>
 
           <section className="space-y-8">
+             <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">Recruiter Notes</h3>
+                  <button 
+                    onClick={() => onUpdate(candidate._id, { notes })} 
+                    disabled={saveLoading}
+                    className="text-[10px] font-black text-indigo-400 hover:text-white transition-colors"
+                  >
+                    {saveLoading ? 'Saving...' : 'SAVE NOTES'}
+                  </button>
+                </div>
+                <textarea 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Write your observations here..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-slate-300 min-h-[120px] focus:outline-none focus:border-indigo-500/50 transition-all resize-none"
+                />
+             </div>
+
             <div>
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400 mb-4">AI Analysis Summary</h3>
               <p className="text-slate-300 leading-relaxed text-sm bg-indigo-500/5 border border-indigo-500/10 p-5 rounded-2xl italic">
@@ -516,7 +560,7 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
             </div>
 
             <div>
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-purple-400 mb-4">Recommended Questions</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-purple-400 mb-4">Interview Preparation</h3>
               <div className="space-y-3">
                 {candidate?.ai_insights?.interview_questions?.map((q, i) => (
                   <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-300">
@@ -524,6 +568,22 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading }) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="pt-4 flex flex-col gap-3">
+               <button onClick={() => onInvite(candidate)} disabled={inviteLoading} className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 transition-all">
+                <Mail className="w-4 h-4" /> {inviteLoading ? 'Sending...' : 'Send AI Interview Invite'}
+              </button>
+              <button 
+                onClick={() => {
+                  const win = window.open('', '_blank');
+                  win.document.write(`<pre style="font-family: sans-serif; padding: 40px; line-height: 1.6; color: #333;">${candidate.resume_text || 'No resume text available.'}</pre>`);
+                  win.document.title = `Resume - ${candidate.name}`;
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-white/10 transition-all"
+              >
+                <FileText className="w-4 h-4" /> View Parsed Resume
+              </button>
             </div>
           </section>
         </div>

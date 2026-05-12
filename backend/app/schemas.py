@@ -23,6 +23,14 @@ class VerifyOTP(BaseModel):
     email: EmailStr
     otp: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
 class UserOut(BaseModel):
     id: str = Field(alias="_id")
     name: str
@@ -47,6 +55,12 @@ class PasswordChange(BaseModel):
     old_password: str
     new_password: str
 
+class SettingsUpdate(BaseModel):
+    notifications_enabled: Optional[bool] = True
+    email_alerts: Optional[bool] = True
+    company_description: Optional[str] = None
+    website: Optional[str] = None
+
 # --- JOB SCHEMAS ---
 
 class JobBase(BaseModel):
@@ -61,6 +75,16 @@ class JobBase(BaseModel):
 
 class JobCreate(JobBase):
     pass
+
+class JobUpdate(BaseModel):
+    title: Optional[str] = None
+    job_type: Optional[str] = None
+    experience_level: Optional[str] = None
+    salary_range: Optional[str] = None
+    skills_required: Optional[List[str]] = None
+    description: Optional[str] = None
+    requirements: Optional[List[str]] = None
+    status: Optional[str] = None # open, closed
 
 class JobOut(JobBase):
     id: str = Field(alias="_id")
@@ -91,10 +115,22 @@ class AIInsights(BaseModel):
     recommendation_label: str
     interview_questions: List[str]
 
+class CandidateUpdate(BaseModel):
+    status: Optional[str] = None
+    is_archived: Optional[bool] = None
+    notes: Optional[str] = None
+
+class CandidateNoteCreate(BaseModel):
+    content: str
+
 class CandidateOut(CandidateBase):
     id: str = Field(alias="_id")
     match_score: Optional[int] = None
     ai_insights: Optional[AIInsights] = None
+    resume_url: Optional[str] = None
+    is_archived: bool = False
+    notes: Optional[str] = None
+    source: str = "public" # public, manual
     created_at: datetime
 
     model_config = {
