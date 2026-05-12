@@ -98,12 +98,33 @@ export default function Dashboard() {
     return grouped;
   }, [filteredCandidates]);
 
+  // Pipeline stage order — candidates can only move FORWARD
+  const STAGE_ORDER = ['new', 'screening', 'interview', 'interviewed', 'hired'];
+
   // Drag & Drop
-  const handleDragStart = (e, candidateId) => e.dataTransfer.setData('candidateId', candidateId);
+  const handleDragStart = (e, candidateId) => {
+    e.dataTransfer.setData('candidateId', candidateId);
+  };
   const handleDragOver = (e) => e.preventDefault();
-  const handleDrop = (e, status) => {
+  const handleDrop = (e, targetStatus) => {
     const candidateId = e.dataTransfer.getData('candidateId');
-    if (candidateId) updateStatusMutation.mutate({ candidateId, status });
+    if (!candidateId) return;
+    const candidate = candidates?.find(c => c._id === candidateId);
+    if (!candidate) return;
+    
+    const currentIdx = STAGE_ORDER.indexOf(candidate.status);
+    const targetIdx = STAGE_ORDER.indexOf(targetStatus);
+    
+    // Block backward movement
+    if (targetIdx < currentIdx) {
+      addToast(`Stage locked — cannot move back from "${candidate.status}" to "${targetStatus}"`, 'error');
+      return;
+    }
+    
+    // No-op if same stage
+    if (targetIdx === currentIdx) return;
+    
+    updateStatusMutation.mutate({ candidateId, status: targetStatus });
   };
 
   const copyApplyLink = async (jobId) => {
@@ -234,11 +255,27 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="flex gap-6 overflow-x-auto pb-8 min-h-[600px] custom-scrollbar">
-                      <KanbanCol title="New Applied" status="new" items={pipeline.new} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanCol title="Screening" status="screening" items={pipeline.screening} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanCol title="Interview" status="interview" items={pipeline.interview} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanCol title="Interviewed" status="interviewed" items={pipeline.interviewed} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
-                      <KanbanCol title="Hired" status="hired" items={pipeline.hired} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onSelect={setSelectedCandidate} onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} inviteLoading={sendInviteMutation.isPending} />
+                      {[
+                        { title: 'New Applied', status: 'new' },
+                        { title: 'Screening', status: 'screening' },
+                        { title: 'Interview', status: 'interview' },
+                        { title: 'Interviewed', status: 'interviewed' },
+                        { title: 'Hired 🎉', status: 'hired' },
+                      ].map(({ title, status }) => (
+                        <KanbanCol 
+                          key={status}
+                          title={title} 
+                          status={status} 
+                          items={pipeline[status] || []} 
+                          onDragStart={handleDragStart} 
+                          onDrop={handleDrop} 
+                          onDragOver={handleDragOver} 
+                          onSelect={setSelectedCandidate} 
+                          onInvite={(c) => sendInviteMutation.mutate({ candidateId: c._id, jobId: c.applied_job_id })} 
+                          inviteLoading={sendInviteMutation.isPending}
+                          stageOrder={STAGE_ORDER}
+                        />
+                      ))}
                     </div>
                   )}
                 </motion.div>
@@ -328,7 +365,13 @@ export default function Dashboard() {
                  deleteCandidateMutation.mutate(id);
                }
             }}
-            onUpdate={(id, data) => updateCandidateDetailsMutation.mutate({ id, ...data })}
+            onUpdate={(id, data) => {
+              if (data.status) {
+                updateStatusMutation.mutate({ candidateId: id, status: data.status });
+              } else {
+                updateCandidateDetailsMutation.mutate({ id, ...data });
+              }
+            }}
             saveLoading={updateCandidateDetailsMutation.isPending}
             onViewResume={(c) => setResumeModalCandidate(c)}
           />
@@ -376,13 +419,35 @@ function StatCard({ title, value, icon, color }) {
   );
 }
 
-function KanbanCol({ title, status, items, onDragStart, onDrop, onDragOver, onSelect, onInvite, inviteLoading }) {
+function KanbanCol({ title, status, items, onDragStart, onDrop, onDragOver, onSelect, onInvite, inviteLoading, stageOrder }) {
+  const STAGE_ORDER = stageOrder || ['new', 'screening', 'interview', 'interviewed', 'hired'];
+  const stageIdx = STAGE_ORDER.indexOf(status);
+  const isHired = status === 'hired';
+
+  const colColors = {
+    new: 'border-slate-700/50',
+    screening: 'border-blue-500/20',
+    interview: 'border-purple-500/20',
+    interviewed: 'border-amber-500/20',
+    hired: 'border-emerald-500/30',
+  };
+
   return (
-    <div className="flex flex-col w-[320px] flex-shrink-0" onDragOver={onDragOver} onDrop={(e) => onDrop(e, status)}>
+    <div 
+      className={`flex flex-col w-[320px] flex-shrink-0 rounded-2xl p-3 border ${colColors[status] || 'border-white/5'} bg-white/[0.02] ${isHired ? 'shadow-lg shadow-emerald-500/5' : ''}`}
+      onDragOver={onDragOver} 
+      onDrop={(e) => onDrop(e, status)}
+    >
       <div className="flex items-center justify-between mb-4 px-1">
-        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-          {title} <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400">{items.length}</span>
+        <h3 className={`text-xs font-black uppercase tracking-widest flex items-center gap-2 ${isHired ? 'text-emerald-400' : 'text-slate-500'}`}>
+          {title}
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400 font-bold">{items.length}</span>
         </h3>
+        {stageIdx > 0 && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-600 font-bold uppercase tracking-widest flex items-center gap-1">
+            🔒 locked
+          </span>
+        )}
       </div>
       <div className="flex-1 space-y-3 min-h-[500px]">
         {items.map(c => (
@@ -390,7 +455,7 @@ function KanbanCol({ title, status, items, onDragStart, onDrop, onDragOver, onSe
         ))}
         {items.length === 0 && (
           <div className="h-24 rounded-2xl border border-white/5 border-dashed flex items-center justify-center">
-            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Empty Stage</p>
+            <p className="text-[10px] text-slate-700 font-bold uppercase tracking-tighter">Drop here</p>
           </div>
         )}
       </div>
@@ -480,8 +545,18 @@ function CandidateDrawer({ candidate, onClose, onInvite, inviteLoading, onDelete
               <X className="w-6 h-6" />
             </button>
             <div className="flex gap-2">
-              <button onClick={() => onUpdate(candidate._id, { status: 'hired' })} className="px-4 py-2 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg hover:bg-emerald-600 hover:text-white transition-all">Shortlist</button>
-              <button onClick={() => onUpdate(candidate._id, { status: 'rejected' })} className="px-4 py-2 bg-rose-600/10 border border-rose-500/20 text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all">Reject</button>
+              <button 
+                onClick={() => onUpdate(candidate._id, { status: 'hired' })} 
+                className="px-4 py-2 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
+              >
+                ✓ Shortlist
+              </button>
+              <button 
+                onClick={() => onUpdate(candidate._id, { status: 'rejected' })} 
+                className="px-4 py-2 bg-rose-600/10 border border-rose-500/20 text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all"
+              >
+                ✗ Reject
+              </button>
               <button onClick={() => onDelete(candidate._id)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-rose-400 transition-colors">
                 <LogOut className="w-4 h-4 rotate-180" />
               </button>

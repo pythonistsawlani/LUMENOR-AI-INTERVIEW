@@ -608,26 +608,83 @@ async def get_candidates(job_id: str = None, current_user_id: str = Depends(get_
         query["applied_job_id"] = job_id
         
     candidates = await db.candidates.find(query).to_list(100)
-    for c in candidates:
-        c.pop("resume_text", None)
+    # NOTE: resume_text IS included here for the Resume Modal feature
     return [fix_id(c) for c in candidates]
 
 @app.patch("/api/candidates/{candidate_id}/status")
-async def update_candidate_status(candidate_id: str, status: str, current_user_id: str = Depends(get_current_user)):
+async def update_candidate_status(
+    candidate_id: str, 
+    status: str, 
+    background_tasks: BackgroundTasks,
+    current_user_id: str = Depends(get_current_user)
+):
     db = await get_db()
-    valid_statuses = ["new", "screening", "interview", "interviewed", "hired"]
-    if status not in valid_statuses:
+    STAGE_ORDER = ["new", "screening", "interview", "interviewed", "hired", "rejected"]
+    
+    if status not in STAGE_ORDER:
         raise HTTPException(status_code=400, detail="Invalid status")
-        
+    
+    candidate = await db.candidates.find_one(
+        {"_id": parse_object_id(candidate_id, "candidate_id"), "recruiter_id": current_user_id}
+    )
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    current_status = candidate.get("status", "new")
+    
+    # Enforce forward-only movement for pipeline stages (not for rejected)
+    if status != "rejected" and current_status in STAGE_ORDER and status in STAGE_ORDER:
+        current_idx = STAGE_ORDER.index(current_status)
+        new_idx = STAGE_ORDER.index(status)
+        # Block backward movement (except: rejected can always be set)
+        if new_idx < current_idx and current_status not in ["rejected"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot move candidate backward from '{current_status}' to '{status}'. Stages are locked once passed."
+            )
+    
     result = await db.candidates.update_one(
         {"_id": parse_object_id(candidate_id, "candidate_id"), "recruiter_id": current_user_id},
         {"$set": {"status": status}}
     )
     
     if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+        raise HTTPException(status_code=404, detail="Candidate not found or status unchanged")
+    
+    # Send offer letter email when candidate is hired
+    if status == "hired":
+        job = await db.jobs.find_one({"_id": parse_object_id(candidate.get("applied_job_id", ""), "job_id")})
+        recruiter = await db.users.find_one({"_id": parse_object_id(current_user_id, "user_id")})
+        job_title = job.get("title", "the position") if job else "the position"
+        company_name = recruiter.get("company_name", "Our Company") if recruiter else "Our Company"
+        candidate_name = candidate.get("name", "Candidate")
+        candidate_email = candidate.get("email", "")
         
-    return {"status": "updated"}
+        offer_subject = f"Congratulations! Offer Letter - {job_title} at {company_name}"
+        offer_body = f"""Dear {candidate_name},
+
+We are delighted to extend this offer of employment for the position of {job_title} at {company_name}.
+
+After careful consideration of your application and interview performance, we are confident that you will be a valuable addition to our team.
+
+--- OFFER DETAILS ---
+Position: {job_title}
+Company: {company_name}
+Status: Offer Extended
+
+Please reply to this email or contact us to confirm your acceptance of this offer. We look forward to welcoming you to the team!
+
+Warm regards,
+Hiring Team
+{company_name}
+
+---
+This offer was generated via HireFlow AI Recruitment Platform."""
+        
+        if candidate_email:
+            background_tasks.add_task(_send_email_sync, candidate_email, offer_subject, offer_body)
+    
+    return {"status": "updated", "new_status": status}
 
 @app.patch("/api/candidates/{candidate_id}")
 async def update_candidate(candidate_id: str, payload: CandidateUpdate, current_user_id: str = Depends(get_current_user)):
